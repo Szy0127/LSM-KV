@@ -1,0 +1,64 @@
+//
+// Created by Shen on 2022/3/21.
+//
+
+#include <iostream>
+#include <fstream>
+#include <ctime>
+#include <cassert>
+#include "MurmurHash3.h"
+#include "kvstore.h"
+
+std::string path = "../data/";
+
+void testHash(long long key) {
+    unsigned int hash[4] = {0};
+    MurmurHash3_x64_128(&key, sizeof(key), (unsigned) time(nullptr), hash);
+    std::cout << hash[0] << " " << hash[1] << " " << hash[2] << " " << hash[3];
+}
+
+void testInput() {
+    std::ofstream f(path + "test");
+    std::string a = "abc";
+    std::string b = "def";
+    f << a << b;
+//f<<a<<'\0'<<b<<'\0';
+    f.close();
+}
+
+
+void testOuput() {
+    std::ifstream f(path + "test");
+    char *a = new char[4];
+    f.read(a, 3);
+    a[3] = '\0';
+    std::cout << a;
+    f.close();
+}
+
+void testKV(){
+    KVStore store("data");
+    store.put(1,"abc");
+    store.put(2,"abcd");
+    store.put(3,"bcd");
+
+}
+void testBF()
+{
+    int n = 10000;
+    BloomFilter bloomFilter(n);
+    for(int i = 0 ; i < n ;i++){
+        bloomFilter.insert(i);
+    }
+
+    int wrong = 0;
+    for(int i = n ; i < 2*n ;i++){
+        if(bloomFilter.contains(i)){
+            wrong++;
+        }
+    }
+    std::cout<<(double)wrong/n<<std::endl;
+}
+int main() {
+    testBF();
+}
