@@ -7,12 +7,14 @@
 #include <cassert>
 
 #define ln2 0.6931471805599453
+//误报率 1/2**k 很小
+
+int BloomFilter::M = 81920;
 BloomFilter::BloomFilter(int n):k(ln2*M/n+1)
 {
     k = k>K_MAX?K_MAX:k;
-    std::cout<<k<<std::endl;
+//    std::cout<<k<<std::endl;
     bitmap = new int[M / bitPerSpace + 1]();//加括号会全部初始化为0  否则是随机的 会影响结果！！
-//    bitmap = new char[M / bitPerSpace + 1]();//加括号会全部初始化为0  否则是随机的 会影响结果！！
 }
 
 BloomFilter::~BloomFilter()
@@ -32,7 +34,7 @@ void BloomFilter::insert(uint64_t key) {
         int loc = hash(key,i);
         bitmap[loc / bitPerSpace] |= 1 << (loc % bitPerSpace);
     }
-    assert(contains(key));
+    //assert(contains(key));
 }
 
 bool BloomFilter::contains(uint64_t key) {
@@ -43,4 +45,14 @@ bool BloomFilter::contains(uint64_t key) {
         }
     }
     return true;
+}
+
+void BloomFilter::store(std::ofstream &f)
+{
+    f.write((char*)bitmap,M/8);
+}
+
+void BloomFilter::load(std::ifstream &f)
+{
+    f.read((char *)bitmap,M/8);
 }

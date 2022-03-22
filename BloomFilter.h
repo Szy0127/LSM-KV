@@ -8,10 +8,12 @@
 #include <set>
 #include <vector>
 #include <functional>
+#include <fstream>
 #include "MurmurHash3.h"
 class BloomFilter {
+public:
+    static int M;//哈希函数范围 即总bitmap的bit数
 private:
-    static const int M = 81920;//哈希函数范围 即总bitmap的bit数
     static const int K_MAX = 2000;
     int k;//哈希函数个数 k=ln2(m/n)
     static const int bitPerSpace = 32;
@@ -23,6 +25,8 @@ public:
     ~BloomFilter();
     void insert(uint64_t key);
     bool contains(uint64_t key);
+    void store(std::ofstream &f);
+    void load(std::ifstream &f);
 };
 
 #endif //HANDIN_BLOOMFILTER_H

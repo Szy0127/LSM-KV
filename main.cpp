@@ -38,10 +38,9 @@ void testOuput() {
 
 void testKV(){
     KVStore store("data");
-    store.put(1,"abc");
-    store.put(2,"abcd");
-    store.put(3,"bcd");
-
+    for(int i = 1 ; i <= 1000 ;i++){
+        store.put(i,std::string(i,'s'));
+    }
 }
 void testBF()
 {
@@ -59,6 +58,22 @@ void testBF()
     }
     std::cout<<(double)wrong/n<<std::endl;
 }
+
+void testRW(){
+    int *key = new int;
+    *key = 1;
+    char *c = new char[10];
+    c = "abd\0cccc";
+    std::string s(c);
+    std::cout<<s<<" "<<s.length()<<std::endl;
+    c = "e";
+    std::cout<<c<<" "<<s;
+    std::pair<int,std::string> b(std::make_pair(*key,s));
+    std::cout<<b.first;
+    *key=2;
+    std::cout<<b.first;
+}
 int main() {
-    testBF();
+    testKV();
+//    testRW();
 }
