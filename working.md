@@ -57,10 +57,27 @@ SSTable 实现
 
 
 
+缓存存储的内容是除了value之外的所有部分
+
+缓存：
+
+- header 32bytes 直接存结构体
+  - 时间戳 8
+  - 数量 8
+  - 最小键 8
+  - 最大键 8
+- BloomFilter 10240bytes 直接存类
+- IndexList 16*length   用数组的两个好处 1 方便直接存  连续简单  2 方便二分查找直接索引
+  - key 8
+  - offset 4
+
+
+
 待完成：
 
-SSTable读进来的KV如何存储？
+1. 涉及sstable的scan
 
-如何把读进来的SSTable进行查找？
+2. 如果没有缓存 需要去所有文件里找
+3. 文件合并 归并排序
+4. 最后一次处理delete
 
-二分查找算法

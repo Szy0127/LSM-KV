@@ -1,5 +1,5 @@
 #include <iostream>
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "SkipList.h"
 
@@ -7,6 +7,8 @@ int SkipList::MAX_LEVEL = 9;
 double SkipList::p = 0.25;
 
 void SkipList::init() {
+    length = 0;
+    value_size = 0;
     key_min = ULONG_LONG_MAX;
     key_max = 0;
     head = new SKNode(MAX_LEVEL, 0, "", SKNodeType::HEAD);
@@ -72,11 +74,12 @@ void SkipList::put(uint64_t key, const std::string &value) {
         update[i] = x;
     }
     x = x->forwards[0];
+    value_size += value.length();
     if (x->key == key) {
+        value_size -= x->val.length();
         x->val = value;
-        return;
     }
-
+    length++;
     int v = randomLevel();
     if (v > level) {
         for (int i = level; i < v; i++) {
@@ -103,7 +106,7 @@ std::string SkipList::get(uint64_t key) {
     if (x->key == key) {
         return x->val;
     } else {
-        return "";
+        return NOTFOUND;
     }
 }
 
@@ -126,6 +129,8 @@ bool SkipList::del(uint64_t key) {
         }
         update[i]->forwards[i] = x->forwards[i];
     }
+    value_size -= x->val.length();
+    length--;
     delete x;
     while (level > 1 && head->forwards[level - 1] == tail) {
         level -= 1;
@@ -142,7 +147,7 @@ void SkipList::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, 
     }
     x = x->forwards[0];
     while (x->key <= key2) {
-        list.push_back(std::make_pair(x->key, x->val));
+        list.emplace_back(x->key, x->val);
         x = x->forwards[0];
     }
 }
@@ -156,13 +161,31 @@ void SkipList::getList(std::list<std::pair<uint64_t, std::string>> &list) {
     SKNode *x = head;
     x = x->forwards[0];
     while (x->type != NIL) {
-        list.push_back(std::make_pair(x->key, x->val));
+        list.emplace_back(x->key, x->val);
         x = x->forwards[0];
     }
 }
 
-void SkipList::getRange(uint64_t &min, uint64_t &max)
+void SkipList::getRange(uint64_t &min, uint64_t &max) const
 {
     min = key_min;
     max = key_max;
+}
+
+uint64_t SkipList::getLength() const
+{
+    return length;
+}
+unsigned int SkipList::getSize() const
+{
+    return value_size;
+}
+
+void SkipList::redo(const key_t key)
+{
+    if(redo_value.empty()){
+        del(key);
+        return;
+    }
+    put(key, redo_value);
 }

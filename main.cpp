@@ -7,6 +7,7 @@
 #include <ctime>
 #include <cassert>
 #include "MurmurHash3.h"
+#include "BloomFilter.h"
 #include "kvstore.h"
 
 std::string path = "../data/";
@@ -39,8 +40,10 @@ void testOuput() {
 void testKV(){
     KVStore store("data");
     for(int i = 1 ; i <= 1000 ;i++){
-        store.put(i,std::string(i,'s'));
+        store.put(i,std::to_string(i)+std::string(i,'s'));
     }
+    std::cout<<store.get(791);
+    std::cout<<store.get(791);
 }
 void testBF()
 {
@@ -59,21 +62,8 @@ void testBF()
     std::cout<<(double)wrong/n<<std::endl;
 }
 
-void testRW(){
-    int *key = new int;
-    *key = 1;
-    char *c = new char[10];
-    c = "abd\0cccc";
-    std::string s(c);
-    std::cout<<s<<" "<<s.length()<<std::endl;
-    c = "e";
-    std::cout<<c<<" "<<s;
-    std::pair<int,std::string> b(std::make_pair(*key,s));
-    std::cout<<b.first;
-    *key=2;
-    std::cout<<b.first;
-}
-int main() {
-    testKV();
-//    testRW();
-}
+//int main() {
+//    testKV();
+////    testBF();
+//
+//}
