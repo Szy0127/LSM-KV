@@ -9,6 +9,10 @@
 #include "MurmurHash3.h"
 #include "BloomFilter.h"
 #include "kvstore.h"
+#include "utils.h"
+#include <unordered_map>
+#include <map>
+#include <chrono>
 
 std::string path = "../data/";
 
@@ -62,8 +66,21 @@ void testBF()
     std::cout<<(double)wrong/n<<std::endl;
 }
 
+std::string SUFFIX = ".sst";
+struct Key_compare
+{
+    bool operator () (const std::string& p1, const std::string& p2) const
+    {
+        timeStamp_t t1 = std::stoull(p1.substr(0, p1.find(SUFFIX)));
+        timeStamp_t t2 = std::stoull(p2.substr(0, p1.find(SUFFIX)));
+        return t1<t2;
+    }
+};
+
 //int main() {
-//    testKV();
+////    testKV();
 ////    testBF();
+////    testMap();
 //
 //}
+

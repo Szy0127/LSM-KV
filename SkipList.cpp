@@ -77,8 +77,11 @@ void SkipList::put(uint64_t key, const std::string &value) {
     value_size += value.length();
     if (x->key == key) {
         value_size -= x->val.length();
+        redo_value = x->val;
         x->val = value;
+        return;
     }
+    redo_value = "";
     length++;
     int v = randomLevel();
     if (v > level) {

@@ -2,17 +2,42 @@
 #include <string>
 
 
-KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir) {
-//    BloomFilter::M = KVStore::BF_SIZE * 8;
+std::string KVStore::SUFFIX = ".sst";
+
+KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir) {
+    if (dataPath.back() != '/') {
+        dataPath.push_back('/');
+    }
     memTable = new SkipList;
-    findTimeStamp();
+
+    //测试的时候每次是从头开始的 需要把本地的文件删干净 或者不进行读入的操作
+    return;
+    //把所有sstable的索引部分都读入缓存 并且找到最后一个时间戳
+    std::vector<std::string> levelDirs;
+    std::vector<std::string> sstables;
+    std::string levelPath;
+    utils::scanDir(dataPath, levelDirs);
+    for (auto &level: levelDirs) {
+        levelPath = dataPath + level + "/";
+        utils::scanDir(levelPath, sstables);
+        for (auto &sstable: sstables) {
+            timeStamp_t t = std::stoull(sstable.substr(0, sstable.find(SUFFIX)));
+            if (t > timeStamp) {
+                timeStamp = t;
+            }
+            getCacheFromSST(levelPath + sstable);
+        }
+    }
 }
 
 KVStore::~KVStore() {
-    for (auto & cache: cacheList) {
-        delete cache.header;
-        delete cache.indexList;
-        delete cache.bloomFilter;
+    if (memTable->getLength() > 0) {
+        memCompaction();
+    }
+    for(auto &cache: caches) {
+        delete cache.second.header;
+        delete[] cache.second.indexList;
+        delete cache.second.bloomFilter;
     }
     delete memTable;
 }
@@ -25,11 +50,11 @@ void KVStore::put(key_t key, const value_t &s) {
     //先插入 这样是否超出阈值的结果是显然的  如果超出就撤回这次操作
     //否则计算的结果会基于是否覆盖 需要进入memtable的插入过程 很麻烦
     memTable->put(key, s);
-    if (HEADER_SIZE + BF_SIZE + sizeof(Index)*(memTable->getLength()) + memTable->getSize() >= MAX_SSTABLE_SIZE) {
+    if (HEADER_SIZE + BF_SIZE + sizeof(Index) * (memTable->getLength()) + memTable->getSize() >= MAX_SSTABLE_SIZE) {
         memTable->redo(key);
         memCompaction();
         memTable->reset();
-        memTable->put(key,s);
+        memTable->put(key, s);
     }
 }
 
@@ -46,27 +71,28 @@ std::string KVStore::get(key_t key) {
     if (memRes != NOTFOUND) {
         return memRes;
     }
-    //如果memTable里没有这个数据 先去缓存找
+    //如果memTable里没有这个数据 去缓存找
+    //缓存有两种类型 第一种是之前存的sstable 会在这次lsm启动之前就读入缓存
+    //第二种是这次启动后写入sstable的  两种情况的sstable的信息全都在缓存里
     unsigned int offset;
     int length;
     bool find;
-    for (auto const &cache: cacheList) {
+//    std::cout<<key<<std::endl;
+    for (auto const &cache: caches) {
         //在找到的同时拿到位置与大小信息
-        find = getValueInfo(cache, key, offset, length);
+//        std::cout<<cache.first<<" "<<cache.second.header->timeStamp<<std::endl;
+        find = getValueInfo(cache.second, key, offset, length);
         if (find) {
             //根据文件名 位置 大小 直接读出信息
-            std::string res = getValueFromSST(cache.header->timeStamp, offset, length);
+            std::string res = getValueFromSST(cache.second.path, offset, length);
             if (res == DELETE) {
                 return NOTFOUND;
             }
             return res;
         }
     }
-
-    //缓存找完去文件里找
-
-
     return NOTFOUND;
+
 }
 
 /**
@@ -78,7 +104,7 @@ bool KVStore::del(key_t key) {
     if (get(key) == NOTFOUND) {
         return false;//跳表和sstable中都没找到
     }
-    if(memTable->get(key)!=NOTFOUND){
+    if (memTable->get(key) != NOTFOUND) {
         memTable->del(key);//在跳表里 可以直接删
         return true;
     }
@@ -93,6 +119,18 @@ bool KVStore::del(key_t key) {
 void KVStore::reset() {
     timeStamp = 0;
     memTable->reset();
+    std::vector<std::string> levelDir, files;
+    std::string levelPath;
+    utils::scanDir(dataPath, levelDir);
+    for (auto &level: levelDir) {
+        levelPath = dataPath + level + '/';
+        utils::scanDir(levelPath, files);
+        for (auto &file: files) {
+//            std::cout<<file<<" ";
+            utils::rmfile((levelPath + file).c_str());
+        }
+        utils::rmdir(levelPath.c_str());
+    }
 }
 
 /**
@@ -111,7 +149,11 @@ void KVStore::memCompaction() {
     key_t key_min, key_max;
     length = memTable->getLength();
     memTable->getRange(key_min, key_max);
-    std::string path = "../data/" + std::to_string(timeStamp);
+    std::string path = dataPath + "level-0/";
+    if (!utils::dirExists(path)) {
+        utils::mkdir(path.c_str());
+    }
+    path.append(std::to_string(timeStamp).append(SUFFIX));
     std::ofstream f(path, std::ios::binary);
 
 //    std::cout << "[info]writeSST:" << timeStamp << " " << length << " " << key_min << " " << key_max << std::endl;
@@ -142,8 +184,9 @@ void KVStore::memCompaction() {
     }
     f.write((char *) indexList, sizeof(Index) * length);
 
-    cacheList.emplace_back(Cache(header, bloomFilter, indexList, path));
-
+//    cacheList.emplace_back(Cache(header, bloomFilter, indexList, path));
+//    caches[path] = Cache(header, bloomFilter, indexList);
+    caches.insert(std::make_pair(timeStamp, Cache(path,header, bloomFilter, indexList)));
     //所有value连续存
     for (auto const &kv: list) {
 //        f.write((char*)&kv.second,kv.second.length());
@@ -210,8 +253,21 @@ void KVStore::read(std::string path) {
 
 }
 
-void KVStore::findTimeStamp() {
-    timeStamp = 0;//遍历sstable 找到最后一个
+void KVStore::getCacheFromSST(const std::string &path) {
+    std::ifstream f(path, std::ios::binary);
+
+    SSTheader *header = new SSTheader();
+    f.read((char *) header, HEADER_SIZE);
+
+//    std::cout << "read:" << header.length << " " << header.key_min << " " << header.key_max << std::endl;
+    BloomFilter *bloomFilter = new BloomFilter();
+    f.read((char *) bloomFilter, sizeof(BloomFilter));
+
+    Index *indexList = new Index[header->length];
+    f.read((char *) indexList, sizeof(Index) * header->length);
+
+//    caches[path] = Cache(header,bloomFilter,indexList);//这样会报错 需要默认构造函数 可能是复制过去？
+    caches.insert(std::make_pair(header->timeStamp, Cache(path,header, bloomFilter, indexList)));
 }
 
 bool KVStore::getValueInfo(const Cache &cache, const key_t &key, unsigned int &offset, int &length) {
@@ -239,7 +295,7 @@ bool KVStore::getValueInfo(const Cache &cache, const key_t &key, unsigned int &o
             offset = cache.indexList[m].offset;
             if (m < header->length - 1) {//不是最后一个
                 length = cache.indexList[m + 1].offset - offset;
-            }else{
+            } else {
                 length = -1;
             }
             return true;
@@ -255,9 +311,9 @@ bool KVStore::getValueInfo(const Cache &cache, const key_t &key, unsigned int &o
 
 //在指定位置读指定长度个字符 返回字符串
 //想到的方法只有seekg+read    char[]转string
-value_t KVStore::getValueFromSST(const timeStamp_t &t, const unsigned int &offset, const int &length) {
+value_t KVStore::getValueFromSST(const std::string &path, const unsigned int &offset, const int &length) {
 //    std::cout<<"[info]is finding in "<<timeStamp<<" offset/length:"<<offset<<" "<<length<<std::endl;
-    std::ifstream f("../data/" + std::to_string(t), std::ios::binary);
+    std::ifstream f(path, std::ios::binary);
     f.seekg(offset);
     if (length < 0) {//最后一个不知道长度 但是可以直接全部输入
         std::string v;

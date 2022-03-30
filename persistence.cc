@@ -178,7 +178,9 @@ int main(int argc, char *argv[])
 	usage(argv[0], verbose ? "ON" : "OFF",
 	      testmode ? "Test Mode" : "Preparation Mode");
 
-	PersistenceTest test("./data", verbose);
+    verbose = true;
+    testmode = true;
+	PersistenceTest test("../data", verbose);
 
 	test.start_test(static_cast<void *>(&testmode));
 
