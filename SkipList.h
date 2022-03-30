@@ -7,11 +7,9 @@
 #include <cstdint>
 #include <iostream>
 #include <list>
+#include "types.h"
 
-#define NOTFOUND ""
 
-typedef uint64_t key_t;
-typedef std::string value_t;
 // 这里的接口和kvstore_api都是一样的  但是不能继承  因为kvstore_api的构造函数是必须带文件夹路径的
 //但是skiplist只是实现了内存中的操作 并不需要路径 所以还是单独写
 class SkipList {
@@ -67,19 +65,19 @@ public:
 
     void finish();
 
-    void put(uint64_t key, const std::string &value);
+    void put(key_t key, const value_t &value);
 
-    std::string get(uint64_t key);//返回查找路径长度
-    bool del(uint64_t key);
+    std::string get(key_t key);//返回查找路径长度
+    bool del(key_t key);
 
-    void scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string>> &list);
+    void scan(key_t key1, key_t key2, KVheap &heap);
 
     void reset();
     void redo(key_t key);
 
-    void getList(std::list<std::pair<uint64_t, std::string>> &list);
+    void getList(std::list<kv_t> &list);
 
-    void getRange(uint64_t &min, uint64_t &max) const;
+    void getRange(key_t &min, key_t &max) const;
     uint64_t getLength() const;
     unsigned int getSize() const;
 };

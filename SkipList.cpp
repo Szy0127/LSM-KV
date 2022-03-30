@@ -141,7 +141,7 @@ bool SkipList::del(uint64_t key) {
     return true;
 }
 
-void SkipList::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string>> &list) {
+void SkipList::scan(uint64_t key1, uint64_t key2, KVheap &heap) {
     SKNode *x = head;
     for (int i = MAX_LEVEL - 1; i >= 0; i--) {
         while (x->forwards[i]->key < key1) {
@@ -150,7 +150,7 @@ void SkipList::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, 
     }
     x = x->forwards[0];
     while (x->key <= key2) {
-        list.emplace_back(x->key, x->val);
+        heap.push(std::make_pair(x->key, x->val));
         x = x->forwards[0];
     }
 }

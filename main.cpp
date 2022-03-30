@@ -13,6 +13,9 @@
 #include <unordered_map>
 #include <map>
 #include <chrono>
+#include <queue>
+#include <algorithm>
+#include <unordered_set>
 
 std::string path = "../data/";
 
@@ -66,21 +69,58 @@ void testBF()
     std::cout<<(double)wrong/n<<std::endl;
 }
 
-std::string SUFFIX = ".sst";
-struct Key_compare
-{
-    bool operator () (const std::string& p1, const std::string& p2) const
-    {
-        timeStamp_t t1 = std::stoull(p1.substr(0, p1.find(SUFFIX)));
-        timeStamp_t t2 = std::stoull(p2.substr(0, p1.find(SUFFIX)));
-        return t1<t2;
+void testSet(){
+    std::unordered_set<int> a;
+    std::set<int>b;
+    int n = 100000;
+    for(int i = 0 ;i < n ;i++){
+        a.insert(i);
+        b.insert(i);
+    }
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    for(int i = 0 ;i < n ;i++){
+        if(a.count(i)==0){
+            std::cout<<"wrong";
+        }
+    }
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+    std::cout<<duration<<std::endl;
+
+    t1 = std::chrono::high_resolution_clock::now();
+    for(int i = 0 ;i < n ;i++){
+        if(b.count(i)==0){
+            std::cout<<"wrong";
+        }
+    }
+    t2 = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+    std::cout<<duration<<std::endl;
+
+}
+
+class mySet:public std::set<int>{
+public:
+    mySet()=default;
+    ~mySet()=default;
+    void insert(int a){
+        if(a!=1){
+            std::set<int>::insert(a);
+        }
     }
 };
-
 //int main() {
 ////    testKV();
 ////    testBF();
 ////    testMap();
-//
+////    testSet();
+//    mySet s;
+//    s.insert(2);
+//    s.insert(3);
+//    s.insert(1);
+//    for(auto i:s){
+//        std::cout<<i;
+//    }
 //}
-
+//

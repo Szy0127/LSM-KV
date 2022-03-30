@@ -4,14 +4,13 @@
 
 std::string KVStore::SUFFIX = ".sst";
 
-KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir) {
+KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir){
     if (dataPath.back() != '/') {
         dataPath.push_back('/');
     }
     memTable = new SkipList;
 
-    //测试的时候每次是从头开始的 需要把本地的文件删干净 或者不进行读入的操作
-    return;
+    //测试的时候每次是从头开始的 需要把本地的文件删干净 或者不进行读入的操作 或者修改测试的代码 加reset
     //把所有sstable的索引部分都读入缓存 并且找到最后一个时间戳
     std::vector<std::string> levelDirs;
     std::vector<std::string> sstables;
@@ -62,10 +61,11 @@ void KVStore::put(key_t key, const value_t &s) {
  * Returns the (string) value of the given key.
  * An empty string indicates not found.
  */
+
 std::string KVStore::get(key_t key) {
     std::string memRes = memTable->get(key);
     //memTable里的数据一定是最新的 如果找到/或者删了 肯定就是对的
-    if (memRes == DELETE) {
+    if (memRes == DELETED) {
         return NOTFOUND;
     }
     if (memRes != NOTFOUND) {
@@ -85,7 +85,7 @@ std::string KVStore::get(key_t key) {
         if (find) {
             //根据文件名 位置 大小 直接读出信息
             std::string res = getValueFromSST(cache.second.path, offset, length);
-            if (res == DELETE) {
+            if (res == DELETED) {
                 return NOTFOUND;
             }
             return res;
@@ -108,7 +108,7 @@ bool KVStore::del(key_t key) {
         memTable->del(key);//在跳表里 可以直接删
         return true;
     }
-    memTable->put(key, DELETE);
+    memTable->put(key, DELETED);
     return true;
 }
 
@@ -138,8 +138,22 @@ void KVStore::reset() {
  * keys in the list should be in an ascending order.
  * An empty string indicates not found.
  */
-void KVStore::scan(key_t key1, key_t key2, std::list<std::pair<key_t, value_t> > &list) {
-    memTable->scan(key1, key2, list);
+void KVStore::scan(key_t key1, key_t key2, std::list<kv_t> &list)
+{
+    scanResult.clear();
+    memTable->scan(key1, key2, scanResult);
+
+
+    while(!scanResult.empty()){
+        list.emplace_back(scanResult.top());
+        scanResult.pop();
+    }
+    for(auto &cache:caches){
+        if(key1 <= cache.second.header->key_max || key2 >= cache.second.header->key_min){
+            //范围对上了  至少是有一个的  所以一定会打开文件
+            //打开文件 但是仍用缓存中的内容去读key和offset 
+        }
+    }
 }
 
 void KVStore::memCompaction() {

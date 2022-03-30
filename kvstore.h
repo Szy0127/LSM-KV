@@ -4,15 +4,13 @@
 #include "SkipList.h"
 #include "BloomFilter.h"
 #include "utils.h"
+#include "types.h"
 #include <fstream>
 #include <utility>
 #include <map>
+#include <queue>
 
-#define NOTFOUND ""
-#define DELETE "~DELETED~"
-typedef uint64_t timeStamp_t;
-typedef uint64_t key_t;
-typedef std::string value_t;
+
 
 class KVStore : public KVStoreAPI {
 	// You can add your implementation here
@@ -45,6 +43,7 @@ private:
     //虽然Cache一共只有24+path.length bytes 但是new分配到堆上的内存占了32+10240+16*length
     //理论上一个Cache占1K-300K
 
+    KVheap scanResult;//用于给出排序后的scan结果
 
     std::string dataPath;//存储数据的根目录
 
@@ -61,6 +60,7 @@ private:
     static value_t getValueFromSST(const std::string &path,const unsigned int &offset,const int &length);
 
     void getCacheFromSST(const std::string &path);
+//    void scanInSST()
 public:
 	KVStore(const std::string &dir);
 
@@ -74,7 +74,7 @@ public:
 
 	void reset() override;
 
-	void scan(key_t key1, key_t key2, std::list<std::pair<key_t, std::string> > &list) override;
+	void scan(key_t key1, key_t key2, std::list<kv_t> &list) override;
 
     void read(std::string path);
 };
