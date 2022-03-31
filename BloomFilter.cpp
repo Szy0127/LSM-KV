@@ -10,7 +10,7 @@
 //误报率 1/2**k 很小
 
 BloomFilter::BloomFilter() = default;
-BloomFilter::BloomFilter(int n):k(ln2*M/n+1),bitmap{0}
+BloomFilter::BloomFilter(uint64_t n):k(ln2*M/n+1),bitmap{0}
 {
     k = k>K_MAX?K_MAX:k;
 //    std::cout<<k<<std::endl;

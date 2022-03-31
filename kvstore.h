@@ -43,8 +43,6 @@ private:
     //虽然Cache一共只有24+path.length bytes 但是new分配到堆上的内存占了32+10240+16*length
     //理论上一个Cache占1K-300K
 
-    KVheap scanResult;//用于给出排序后的scan结果
-
     std::string dataPath;//存储数据的根目录
 
     //遍历缓存 如果找到key 需要去文件读value 所以需要知道文件的完整路径
@@ -55,12 +53,18 @@ private:
 
     void memCompaction();
 
+
+    static uint64_t binarySearchGet(const Index* indexList, uint64_t length, const key_t &key);
+    static uint64_t binarySearchScan(const Index* indexList, uint64_t length, const key_t &key,bool begin);
+
     //若找到key 返回true 并传递位置与长度 如果长度是-1表示到文件末尾
     static bool getValueInfo(const Cache &cache,const key_t &key,unsigned int &offset,int &length);
     static value_t getValueFromSST(const std::string &path,const unsigned int &offset,const int &length);
 
     void getCacheFromSST(const std::string &path);
-//    void scanInSST()
+    static void scanInSST(const std::string &path,const Index* indexList,const uint64_t &begin,const uint64_t &end,bool last,KVheap &heap);
+
+    void loadSST();
 public:
 	KVStore(const std::string &dir);
 
@@ -68,7 +72,7 @@ public:
 
 	void put(key_t key, const value_t &s) override;
 
-	std::string get(key_t key) override;
+	value_t get(key_t key) override;
 
 	bool del(key_t key) override;
 

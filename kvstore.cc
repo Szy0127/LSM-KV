@@ -4,13 +4,18 @@
 
 std::string KVStore::SUFFIX = ".sst";
 
-KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir){
+KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir) {
     if (dataPath.back() != '/') {
         dataPath.push_back('/');
     }
     memTable = new SkipList;
 
     //测试的时候每次是从头开始的 需要把本地的文件删干净 或者不进行读入的操作 或者修改测试的代码 加reset
+    loadSST();
+}
+
+void KVStore::loadSST()
+{
     //把所有sstable的索引部分都读入缓存 并且找到最后一个时间戳
     std::vector<std::string> levelDirs;
     std::vector<std::string> sstables;
@@ -33,7 +38,7 @@ KVStore::~KVStore() {
     if (memTable->getLength() > 0) {
         memCompaction();
     }
-    for(auto &cache: caches) {
+    for (auto &cache: caches) {
         delete cache.second.header;
         delete[] cache.second.indexList;
         delete cache.second.bloomFilter;
@@ -50,7 +55,7 @@ void KVStore::put(key_t key, const value_t &s) {
     //否则计算的结果会基于是否覆盖 需要进入memtable的插入过程 很麻烦
     memTable->put(key, s);
     if (HEADER_SIZE + BF_SIZE + sizeof(Index) * (memTable->getLength()) + memTable->getSize() >= MAX_SSTABLE_SIZE) {
-        memTable->redo(key);
+        memTable->undo(key);
         memCompaction();
         memTable->reset();
         memTable->put(key, s);
@@ -138,31 +143,41 @@ void KVStore::reset() {
  * keys in the list should be in an ascending order.
  * An empty string indicates not found.
  */
-void KVStore::scan(key_t key1, key_t key2, std::list<kv_t> &list)
-{
-    scanResult.clear();
+void KVStore::scan(key_t key1, key_t key2, std::list<kv_t> &list) {
+//    std::cout << "scan:" << key1 << " " << key2 << std::endl;
+    KVheap scanResult;
     memTable->scan(key1, key2, scanResult);
 
-
-    while(!scanResult.empty()){
-        list.emplace_back(scanResult.top());
-        scanResult.pop();
-    }
-    for(auto &cache:caches){
-        if(key1 <= cache.second.header->key_max || key2 >= cache.second.header->key_min){
-            //范围对上了  至少是有一个的  所以一定会打开文件
-            //打开文件 但是仍用缓存中的内容去读key和offset 
+    for (auto &cache: caches) {
+        if (key1 > cache.second.header->key_max || key2 < cache.second.header->key_min) {
+            continue;
         }
+        //第一个大于等于key1的key的位置
+        uint64_t begin = key1 <= cache.second.header->key_min ? 0 : binarySearchScan(cache.second.indexList,
+                                                                                     cache.second.header->length,
+                                                                                     key1, true);
+        uint64_t end = key2 >= cache.second.header->key_max ? cache.second.header->length - 1 : binarySearchScan(
+                cache.second.indexList, cache.second.header->length, key2, false);
+        scanInSST(cache.second.path, cache.second.indexList, begin, end, end == cache.second.header->length - 1,
+                  scanResult);
+//        std::cout << cache.second.header->key_min << " " << cache.second.header->key_max << " " << begin << " " << end<< std::endl;
     }
+    scanResult.toList(list);
 }
 
 void KVStore::memCompaction() {
+    std::list<std::pair<uint64_t, std::string>> list;
+    memTable->getList(list);
 // 头部 时间戳 数量 最大值 最小值 各8bytes
     timeStamp++;
     uint64_t length;
     key_t key_min, key_max;
+
     length = memTable->getLength();
-    memTable->getRange(key_min, key_max);
+    //跳表本身是有序排列的  所以不需要动态维护key的范围 stl的list是双向链表 所以back应该不需要遍历
+    key_min = list.front().first;
+    key_max = list.back().first;
+
     std::string path = dataPath + "level-0/";
     if (!utils::dirExists(path)) {
         utils::mkdir(path.c_str());
@@ -174,8 +189,6 @@ void KVStore::memCompaction() {
     SSTheader *header = new SSTheader(timeStamp, length, key_min, key_max);
     f.write((char *) header, HEADER_SIZE);
 
-    std::list<std::pair<uint64_t, std::string>> list;
-    memTable->getList(list);
 
     // 布隆过滤器 10240bytes
     BloomFilter *bloomFilter = new BloomFilter(length);
@@ -200,7 +213,7 @@ void KVStore::memCompaction() {
 
 //    cacheList.emplace_back(Cache(header, bloomFilter, indexList, path));
 //    caches[path] = Cache(header, bloomFilter, indexList);
-    caches.insert(std::make_pair(timeStamp, Cache(path,header, bloomFilter, indexList)));
+    caches.insert(std::make_pair(timeStamp, Cache(path, header, bloomFilter, indexList)));
     //所有value连续存
     for (auto const &kv: list) {
 //        f.write((char*)&kv.second,kv.second.length());
@@ -281,14 +294,52 @@ void KVStore::getCacheFromSST(const std::string &path) {
     f.read((char *) indexList, sizeof(Index) * header->length);
 
 //    caches[path] = Cache(header,bloomFilter,indexList);//这样会报错 需要默认构造函数 可能是复制过去？
-    caches.insert(std::make_pair(header->timeStamp, Cache(path,header, bloomFilter, indexList)));
+    caches.insert(std::make_pair(header->timeStamp, Cache(path, header, bloomFilter, indexList)));
+}
+
+uint64_t KVStore::binarySearchGet(const Index *const indexList, uint64_t length, const key_t &key) {
+    uint64_t l = 0;
+    uint64_t r = length - 1;
+    uint64_t m;
+    while (l <= r) {
+        m = (l + r) / 2;
+        if (indexList[m].key == key) {
+            return m;
+        }
+        if (indexList[m].key < key) {
+            l = m + 1;
+        } else {
+            r = m - 1;
+        }
+    }
+    return length;//没找到
+}
+
+uint64_t KVStore::binarySearchScan(const Index *const indexList, uint64_t length, const key_t &key, bool begin) {
+    uint64_t l = 0;
+    uint64_t r = length - 1;
+    uint64_t m;
+    while (r - l > 1) {
+        m = (l + r) / 2;
+        if (indexList[m].key == key) {
+            return m;
+        }
+        if (indexList[m].key < key) {
+            l = m;
+        } else {
+            r = m;
+        }
+    }
+    if (begin) {
+        return r;
+    }
+    return l;
 }
 
 bool KVStore::getValueInfo(const Cache &cache, const key_t &key, unsigned int &offset, int &length) {
 //    std::cout<<"[info]is finding "<<key<<std::endl;
-    SSTheader *header = cache.header;
     // 检查范围
-    if (key < header->key_min || key > header->key_max) {
+    if (key < cache.header->key_min || key > cache.header->key_max) {
         return false;
     }
     //检查BF  BF没有一定没有 BF有实际没有只会多花时间
@@ -297,30 +348,17 @@ bool KVStore::getValueInfo(const Cache &cache, const key_t &key, unsigned int &o
     }
 
     //二分查找 可能找不到
-    uint64_t l = 0;
-    uint64_t r = header->length - 1;
-    uint64_t m;
-//    std::cout << key << std::endl;
-    while (l <= r) {
-        m = (l + r) / 2;
-//        std::cout << m << " ";
-        if (cache.indexList[m].key == key) {
-            //找到就设置相应信息 如果在末尾不好算长度 用特殊标记
-            offset = cache.indexList[m].offset;
-            if (m < header->length - 1) {//不是最后一个
-                length = cache.indexList[m + 1].offset - offset;
-            } else {
-                length = -1;
-            }
-            return true;
-        }
-        if (cache.indexList[m].key < key) {
-            l = m + 1;
-        } else {
-            r = m - 1;
-        }
+    uint64_t loc = binarySearchGet(cache.indexList, cache.header->length, key);
+    if (loc >= cache.header->length) {
+        return false;
     }
-    return false;
+    offset = cache.indexList[loc].offset;
+    if (loc < cache.header->length - 1) {
+        length = cache.indexList[loc + 1].offset - offset;
+    } else {
+        length = -1;
+    }
+    return true;
 }
 
 //在指定位置读指定长度个字符 返回字符串
@@ -343,4 +381,40 @@ value_t KVStore::getValueFromSST(const std::string &path, const unsigned int &of
     delete[] c;
     f.close();//不close会有问题
     return v;
+}
+
+void
+KVStore::scanInSST(const std::string &path, const Index *const indexList, const uint64_t &begin, const uint64_t &end,
+                   bool last, KVheap &heap) {
+    std::ifstream f(path, std::ios::binary);
+    unsigned int offset = indexList[begin].offset;
+    f.seekg(offset);
+    unsigned int length;
+    char *c;
+    for (uint64_t i = begin; i < end; i++) {
+        length = indexList[i+1].offset - offset;
+        c = new char[length + 1];
+        f.read(c, length);
+        c[length] = '\0';
+        std::string v(c);
+        if (v != DELETED) {
+            heap.push(std::make_pair(indexList[i].key, v));
+        }
+        delete[] c;
+        offset += length;
+    }
+
+    if (last) {
+        std::string v;
+        f >> v;
+        heap.push(std::make_pair(indexList[end].key, v));
+    } else {
+        length = indexList[end + 1].offset - offset;
+        c = new char[length + 1];
+        f.read(c, length);
+        c[length] = '\0';
+        heap.push(std::make_pair(indexList[end].key, std::string(c)));
+        delete[] c;
+    }
+    f.close();
 }

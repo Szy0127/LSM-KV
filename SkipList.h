@@ -38,12 +38,12 @@ private:
     };
 
 
-    key_t key_min;
-    key_t key_max;
     uint64_t length; // 跳表中储存的元素个数 如果不在这里维护 需要在put中传递是否非覆盖的信息
     unsigned int value_size;//所有的字符串长度总和 如果不在这里维护 需要在put中传递增加/减少size的信息
 
-    value_t redo_value;//先插入 如果超过阈值需要撤回  上一步没有覆盖 直接删 有覆盖 恢复
+    value_t overwritten;//先插入 如果超过阈值需要撤回  上一步没有覆盖 直接删 有覆盖 恢复
+    bool rewrite;//判断是否是覆盖
+
 
     SKNode *head;
     SKNode *tail;
@@ -67,17 +67,23 @@ public:
 
     void put(key_t key, const value_t &value);
 
-    std::string get(key_t key);//返回查找路径长度
+    value_t get(key_t key);
+
+
+    //删除操作需更新key的范围
     bool del(key_t key);
 
     void scan(key_t key1, key_t key2, KVheap &heap);
 
     void reset();
-    void redo(key_t key);
+
+
+    //如果上个操作是覆盖 则需要恢复value
+    //如果上个操作是插入 则删除该键
+    void undo(const key_t &key);
 
     void getList(std::list<kv_t> &list);
 
-    void getRange(key_t &min, key_t &max) const;
     uint64_t getLength() const;
     unsigned int getSize() const;
 };

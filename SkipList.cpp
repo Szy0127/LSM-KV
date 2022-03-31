@@ -9,8 +9,7 @@ double SkipList::p = 0.25;
 void SkipList::init() {
     length = 0;
     value_size = 0;
-    key_min = ULONG_LONG_MAX;
-    key_max = 0;
+    overwritten.clear();
     head = new SKNode(MAX_LEVEL, 0, "", SKNodeType::HEAD);
     tail = new SKNode(1, ULONG_LONG_MAX, "", SKNodeType::NIL);
     level = 1;
@@ -63,8 +62,6 @@ void SkipList::update_clear() {
 
 
 void SkipList::put(uint64_t key, const std::string &value) {
-    key_min = key < key_min ? key : key_min;
-    key_max = key > key_max ? key : key_max;
     update_clear();
     SKNode *x = head;
     for (int i = level - 1; i >= 0; i--) {
@@ -77,11 +74,11 @@ void SkipList::put(uint64_t key, const std::string &value) {
     value_size += value.length();
     if (x->key == key) {
         value_size -= x->val.length();
-        redo_value = x->val;
+        overwritten = x->val;
         x->val = value;
         return;
     }
-    redo_value = "";
+    overwritten.clear();
     length++;
     int v = randomLevel();
     if (v > level) {
@@ -160,7 +157,7 @@ void SkipList::reset() {
     init();
 }
 
-void SkipList::getList(std::list<std::pair<uint64_t, std::string>> &list) {
+void SkipList::getList(std::list<kv_t> &list) {
     SKNode *x = head;
     x = x->forwards[0];
     while (x->type != NIL) {
@@ -169,26 +166,18 @@ void SkipList::getList(std::list<std::pair<uint64_t, std::string>> &list) {
     }
 }
 
-void SkipList::getRange(uint64_t &min, uint64_t &max) const
-{
-    min = key_min;
-    max = key_max;
-}
-
-uint64_t SkipList::getLength() const
-{
+uint64_t SkipList::getLength() const {
     return length;
 }
-unsigned int SkipList::getSize() const
-{
+
+unsigned int SkipList::getSize() const {
     return value_size;
 }
 
-void SkipList::redo(const key_t key)
-{
-    if(redo_value.empty()){
+void SkipList::undo(const key_t &key) {
+    if (overwritten.empty()) {//上一次操作是插入 直接删
         del(key);
-        return;
+    } else {//上一次操作是覆盖 恢复原来的值
+        put(key, overwritten);
     }
-    put(key, redo_value);
 }

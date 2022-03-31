@@ -7,7 +7,7 @@
 
 #include <queue>
 #include <unordered_set>
-
+#include <list>
 const std::string NOTFOUND =  "";
 const std::string DELETED  = "~DELETED~";
 
@@ -15,6 +15,7 @@ typedef uint64_t timeStamp_t;
 typedef uint64_t key_t;
 typedef std::string value_t;
 typedef std::pair<key_t,value_t> kv_t;
+
 //auto KVcmp = [](const kv_t& p1, const kv_t& p2)->bool{return p1.first >p2.first;};
 struct KVcmp{
     bool operator()(const kv_t& p1, const kv_t& p2){return p1.first >p2.first;}
@@ -39,10 +40,9 @@ public:
             std::priority_queue<kv_t,std::vector<kv_t>, KVcmp>::push(kv);
         }
     }
-    void clear()
-    {
-        keySet.clear();
-        while(!empty()){//实际上不会发生
+    void toList(std::list<kv_t> &list){
+        while(!empty()){
+            list.emplace_back(top());
             pop();
         }
     }

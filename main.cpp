@@ -110,17 +110,15 @@ public:
         }
     }
 };
+void reset(){
+    KVStore store("../data");
+    store.reset();
+}
 //int main() {
 ////    testKV();
 ////    testBF();
 ////    testMap();
 ////    testSet();
-//    mySet s;
-//    s.insert(2);
-//    s.insert(3);
-//    s.insert(1);
-//    for(auto i:s){
-//        std::cout<<i;
-//    }
+//    reset();
 //}
 //

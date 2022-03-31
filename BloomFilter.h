@@ -22,7 +22,7 @@ private:
     int bitmap[M / bitPerSpace]{}; //如果用uint64_t或者long long  bitPerSpace都是32 不知道为什么 会错误 误报率极高
     static unsigned int hash(key_t key,int index);
 public:
-    BloomFilter(int n);
+    BloomFilter(uint64_t n);
     BloomFilter();
     ~BloomFilter();
     void insert(key_t key);

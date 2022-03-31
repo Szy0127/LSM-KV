@@ -52,9 +52,6 @@ private:
         phase();
 
 
-        if(max > 10000){
-            return;
-        }
         // Test scan
         std::list<std::pair<uint64_t, std::string> > list_ans;
         std::list<std::pair<uint64_t, std::string> > list_stu;
@@ -64,9 +61,9 @@ private:
 //			if (i < max / 2) list_ans.emplace_back(std::make_pair(i,std::string(i+1, 's')));
             if (i < max / 2) list_ans.emplace_back(std::make_pair(i, std::to_string(i + 1) + std::string(i + 1, 's')));
         }
-
         store.scan(0, max / 2 - 1, list_stu);
         EXPECT(list_ans.size(), list_stu.size());
+
 
         auto ap = list_ans.begin();
         auto sp = list_stu.begin();
@@ -98,7 +95,6 @@ public:
     }
 
     void start_test(void *args = NULL) override {
-        store.reset();
         std::cout << "KVStore Correctness Test" << std::endl;
 
         std::cout << "[Simple Test]" << std::endl;
