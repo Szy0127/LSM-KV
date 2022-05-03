@@ -94,6 +94,11 @@ private:
 		uint64_t i;
 		// Test data
 		for (i = 0; i < max; ++i) {
+            if(i==2027){
+                i = 2027;
+//                return;
+            }
+//            if(i == 2029)return;
 			switch (i & 3) {
 			case 0:
 				EXPECT(std::string(i+1, 't'), store.get(i));
@@ -138,48 +143,12 @@ public:
 	}
 };
 
-void usage(const char *prog, const char *verb, const char *mode)
-{
-	std::cout << "Usage: " << prog  << " [-t] [-v]" << std::endl;
-	std::cout << "  -t: test mode for persistence test,"
-		" if -t is not given, the program only prepares data for test."
-		" [currently " << mode << "]" << std::endl;
-	std::cout << "  -v: print extra info for failed tests [currently ";
-	std::cout << verb << "]" << std::endl;
-	std::cout << std::endl;
-	std::cout << " NOTE: A normal usage is as follows:" << std::endl;
-	std::cout << "    1. invoke `" << prog << "`;" << std::endl;
-	std::cout << "    2. terminate (kill) the program when data is ready;";
-	std::cout << std::endl;
-	std::cout << "    3. invoke `" << prog << " -t ` to test." << std::endl;
-	std::cout << std::endl;
-	std::cout.flush();
-}
 
 
 int main(int argc, char *argv[])
 {
-	bool verbose = false;
-	bool testmode = false;
-
-	if (argc == 2) {
-		verbose = std::string(argv[1]) == "-v";
-		testmode = std::string(argv[1]) == "-t";
-	} else if (argc == 3) {
-		verbose = std::string(argv[1]) == "-v" ||
-			std::string(argv[2]) == "-v";
-		testmode = std::string(argv[1]) == "-t" ||
-			std::string(argv[2]) == "-t";
-	} else if (argc > 3) {
-		std::cerr << "Too many arguments." << std::endl;
-		usage(argv[0], "OFF", "Preparation Mode");
-		exit(-1);
-	}
-	usage(argv[0], verbose ? "ON" : "OFF",
-	      testmode ? "Test Mode" : "Preparation Mode");
-
-    verbose = true;
-    testmode = true;
+	bool verbose = true;
+	bool testmode = true;
 	PersistenceTest test("../data", verbose);
 
 	test.start_test(static_cast<void *>(&testmode));

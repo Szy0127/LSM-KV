@@ -34,7 +34,7 @@ void KVStore::loadSST()
                 timeStamp = t;
             }
             std::shared_ptr<CacheSST> cache = getCacheFromSST(levelPath + sstable);
-            cacheTime[level_count].insert(std::make_pair(timeStamp,cache));
+            cacheTime[level_count].insert(std::make_pair(t,cache));
             cacheKey[level_count].insert(std::make_pair(cache->header->key_min,cache));
         }
         level_count++;

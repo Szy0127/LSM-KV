@@ -91,8 +91,8 @@ public:
 
 		store.reset();
 		
-//		std::cout << "[Simple Test]" << std::endl;
-//		regular_test(SIMPLE_TEST_MAX);
+		std::cout << "[Simple Test]" << std::endl;
+		regular_test(SIMPLE_TEST_MAX);
 		
 		store.reset();
 
