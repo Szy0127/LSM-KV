@@ -9,7 +9,6 @@ KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir) {
         dataPath.push_back('/');
     }
     memTable = new SkipList;
-
     //测试的时候每次是从头开始的 需要把本地的文件删干净 或者不进行读入的操作 或者修改测试的代码 加reset
     loadSST();
 }
@@ -21,7 +20,12 @@ void KVStore::loadSST()
     std::vector<std::string> sstables;
     std::string levelPath;
     utils::scanDir(dataPath, levelDirs);
+    int level_count = 0;
     for (auto &level: levelDirs) {
+        if(cacheTime.size() < level_count+1){
+            cacheTime.emplace_back(CacheLevelTime());
+            cacheKey.emplace_back(CacheLevelKey());
+        }
         levelPath = dataPath + level + "/";
         utils::scanDir(levelPath, sstables);
         for (auto &sstable: sstables) {
@@ -29,19 +33,19 @@ void KVStore::loadSST()
             if (t > timeStamp) {
                 timeStamp = t;
             }
-            getCacheFromSST(levelPath + sstable);
+            std::shared_ptr<CacheSST> cache = getCacheFromSST(levelPath + sstable);
+            cacheTime[level_count].insert(std::make_pair(timeStamp,cache));
+            cacheKey[level_count].insert(std::make_pair(cache->header->key_min,cache));
         }
+        level_count++;
     }
+    cacheTime.emplace_back(CacheLevelTime());
+    cacheKey.emplace_back(CacheLevelKey());
 }
 
 KVStore::~KVStore() {
     if (memTable->getLength() > 0) {
         memCompaction();
-    }
-    for (auto &cache: caches) {
-        delete cache.second.header;
-        delete[] cache.second.indexList;
-        delete cache.second.bloomFilter;
     }
     delete memTable;
 }
@@ -83,18 +87,21 @@ std::string KVStore::get(key_t key) {
     int length;
     bool find;
 //    std::cout<<key<<std::endl;
-    for (auto const &cache: caches) {
-        //在找到的同时拿到位置与大小信息
+    for (auto const &cacheLine: cacheTime) {
+        for(auto const &cache:cacheLine){
+            //在找到的同时拿到位置与大小信息
 //        std::cout<<cache.first<<" "<<cache.second.header->timeStamp<<std::endl;
-        find = getValueInfo(cache.second, key, offset, length);
-        if (find) {
-            //根据文件名 位置 大小 直接读出信息
-            std::string res = getValueFromSST(cache.second.path, offset, length);
-            if (res == DELETED) {
-                return NOTFOUND;
+            find = getValueInfo(*cache.second, key, offset, length);
+            if (find) {
+                //根据文件名 位置 大小 直接读出信息
+                std::string res = getValueFromSST(cache.second->path, offset, length);
+                if (res == DELETED) {
+                    return NOTFOUND;
+                }
+                return res;
             }
-            return res;
-        }
+    }
+
     }
     return NOTFOUND;
 
@@ -124,6 +131,8 @@ bool KVStore::del(key_t key) {
 void KVStore::reset() {
     timeStamp = 0;
     memTable->reset();
+    cacheTime.clear();
+    cacheKey.clear();
     std::vector<std::string> levelDir, files;
     std::string levelPath;
     utils::scanDir(dataPath, levelDir);
@@ -136,6 +145,8 @@ void KVStore::reset() {
         }
         utils::rmdir(levelPath.c_str());
     }
+    cacheTime.emplace_back(CacheLevelTime());
+    cacheKey.emplace_back(CacheLevelKey());
 }
 
 /**
@@ -148,20 +159,24 @@ void KVStore::scan(key_t key1, key_t key2, std::list<kv_t> &list) {
     KVheap scanResult;
     memTable->scan(key1, key2, scanResult);
 
-    for (auto &cache: caches) {
-        if (key1 > cache.second.header->key_max || key2 < cache.second.header->key_min) {
-            continue;
-        }
-        //第一个大于等于key1的key的位置
-        uint64_t begin = key1 <= cache.second.header->key_min ? 0 : binarySearchScan(cache.second.indexList,
-                                                                                     cache.second.header->length,
-                                                                                     key1, true);
-        uint64_t end = key2 >= cache.second.header->key_max ? cache.second.header->length - 1 : binarySearchScan(
-                cache.second.indexList, cache.second.header->length, key2, false);
-        scanInSST(cache.second.path, cache.second.indexList, begin, end, end == cache.second.header->length - 1,
-                  scanResult);
+    for (auto const &cacheLine: cacheTime) {{
+        for(auto const&cache:cacheLine){
+            if (key1 > cache.second->header->key_max || key2 < cache.second->header->key_min) {
+                continue;
+            }
+            //第一个大于等于key1的key的位置
+            uint64_t begin = key1 <= cache.second->header->key_min ? 0 : binarySearchScan(cache.second->indexList,
+                                                                                         cache.second->header->length,
+                                                                                         key1, true);
+            uint64_t end = key2 >= cache.second->header->key_max ? cache.second->header->length - 1 : binarySearchScan(
+                    cache.second->indexList, cache.second->header->length, key2, false);
+            scanInSST(cache.second->path, cache.second->indexList, begin, end, end == cache.second->header->length - 1,
+                      scanResult);
 //        std::cout << cache.second.header->key_min << " " << cache.second.header->key_max << " " << begin << " " << end<< std::endl;
+        }
+        }
     }
+
     scanResult.toList(list);
 }
 
@@ -213,7 +228,9 @@ void KVStore::memCompaction() {
 
 //    cacheList.emplace_back(Cache(header, bloomFilter, indexList, path));
 //    caches[path] = Cache(header, bloomFilter, indexList);
-    caches.insert(std::make_pair(timeStamp, Cache(path, header, bloomFilter, indexList)));
+    std::shared_ptr<CacheSST> cache = std::shared_ptr<CacheSST>(new CacheSST(path, header, bloomFilter, indexList));
+    cacheTime[0].insert(std::make_pair(timeStamp, cache));
+    cacheKey[0].insert(std::make_pair(key_min, cache));
     //所有value连续存
     for (auto const &kv: list) {
 //        f.write((char*)&kv.second,kv.second.length());
@@ -280,7 +297,7 @@ void KVStore::read(std::string path) {
 
 }
 
-void KVStore::getCacheFromSST(const std::string &path) {
+std::shared_ptr<KVStore::CacheSST> KVStore::getCacheFromSST(const std::string &path) {
     std::ifstream f(path, std::ios::binary);
 
     SSTheader *header = new SSTheader();
@@ -294,7 +311,7 @@ void KVStore::getCacheFromSST(const std::string &path) {
     f.read((char *) indexList, sizeof(Index) * header->length);
 
 //    caches[path] = Cache(header,bloomFilter,indexList);//这样会报错 需要默认构造函数 可能是复制过去？
-    caches.insert(std::make_pair(header->timeStamp, Cache(path, header, bloomFilter, indexList)));
+    return std::shared_ptr<CacheSST>(new CacheSST(path, header, bloomFilter, indexList));
 }
 
 uint64_t KVStore::binarySearchGet(const Index *const indexList, uint64_t length, const key_t &key) {
@@ -336,7 +353,7 @@ uint64_t KVStore::binarySearchScan(const Index *const indexList, uint64_t length
     return l;
 }
 
-bool KVStore::getValueInfo(const Cache &cache, const key_t &key, unsigned int &offset, int &length) {
+bool KVStore::getValueInfo(const CacheSST &cache, const key_t &key, unsigned int &offset, int &length) {
 //    std::cout<<"[info]is finding "<<key<<std::endl;
     // 检查范围
     if (key < cache.header->key_min || key > cache.header->key_max) {
