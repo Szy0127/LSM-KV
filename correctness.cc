@@ -35,25 +35,9 @@ private:
 			EXPECT(std::string(i+1, 's'), store.get(i));
 		phase();
 
-		// Test deletions
-		for (i = 0; i < max; i+=2)
-			EXPECT(true, store.del(i));
-
-		for (i = 0; i < max; ++i)
-			EXPECT((i & 1) ? std::string(i+1, 's') : not_found,
-			       store.get(i));
-
-		for (i = 1; i < max; ++i)
-			EXPECT(i & 1, store.del(i));
-
-		phase();
-
 		// Test scan
 		std::list<std::pair<uint64_t, std::string> > list_ans;
 		std::list<std::pair<uint64_t, std::string> > list_stu;
-		for (i = 0; i < max; ++i) {
-			store.put(i, std::string(i+1, 's'));
-		}
 		
 		for (i = 0; i < max / 2; ++i) {
 			list_ans.emplace_back(std::make_pair(i, std::string(i+1, 's')));
@@ -78,8 +62,18 @@ private:
 			}
 		}
 
-		for (i = 0; i < max; i++)
+		phase();
+
+		// Test deletions
+		for (i = 0; i < max; i+=2)
 			EXPECT(true, store.del(i));
+
+		for (i = 0; i < max; ++i)
+			EXPECT((i & 1) ? std::string(i+1, 's') : not_found,
+			       store.get(i));
+
+		for (i = 1; i < max; ++i)
+			EXPECT(i & 1, store.del(i));
 
 		phase();
 
@@ -93,12 +87,14 @@ public:
 
 	void start_test(void *args = NULL) override
 	{
-//        store.reset();
-//        return;
 		std::cout << "KVStore Correctness Test" << std::endl;
 
+		store.reset();
+		
 		std::cout << "[Simple Test]" << std::endl;
 		regular_test(SIMPLE_TEST_MAX);
+		
+		store.reset();
 
 		std::cout << "[Large Test]" << std::endl;
 		regular_test(LARGE_TEST_MAX);
@@ -107,7 +103,6 @@ public:
 
 int main(int argc, char *argv[])
 {
-
 	bool verbose = (argc == 2 && std::string(argv[1]) == "-v");
 
 	std::cout << "Usage: " << argv[0] << " [-v]" << std::endl;
@@ -116,8 +111,7 @@ int main(int argc, char *argv[])
 	std::cout << std::endl;
 	std::cout.flush();
 
-    verbose = true;
-	CorrectnessTest test("../data", verbose);
+	CorrectnessTest test("./data", verbose);
 
 	test.start_test();
 

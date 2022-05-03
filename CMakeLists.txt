@@ -15,7 +15,7 @@ add_executable(lsm_kv
         BloomFilter.h
         BloomFilter.cpp
         MurmurHash3.h
-        main.cpp
+        #main.cpp
         types.h
 #        persistence.cc
         test.h
