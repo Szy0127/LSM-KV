@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 14)
 include_directories(.)
 
 add_executable(lsm_kv
-#        test/correctness.cc
-        test/persistence.cc
+        test/correctness.cc
+#        test/persistence.cc
         kvstore.cc
         kvstore.h
         kvstore_api.h

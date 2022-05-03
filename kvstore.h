@@ -58,12 +58,16 @@ private:
     std::vector<CacheLevelTime> cacheTime;
     std::vector<CacheLevelKey> cacheKey;
 
-    timeStamp_t timeStamp;
+    timeStamp_t timeStamp;//新插入元素的时间戳
+    timeStamp_t timeCompaction;//合并时最大的时间戳；
     SkipList *memTable;
+    int compactionLevel;//正常情况是0 表示在level0插入memTable满了之后的sstable
 
     void memCompaction();
+    void zeroCompaction();
+    void compaction(int level);//level --> level+1
 
-
+    int maxLevelSize(int level);
     static uint64_t binarySearchGet(const Index* indexList, uint64_t length, const key_t &key);
     static uint64_t binarySearchScan(const Index* indexList, uint64_t length, const key_t &key,bool begin);
 

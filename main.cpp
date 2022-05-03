@@ -6,10 +6,10 @@
 #include <fstream>
 #include <ctime>
 #include <cassert>
-#include "MurmurHash3.h"
-#include "BloomFilter.h"
+#include "utils/MurmurHash3.h"
+#include "BloomFilter//BloomFilter.h"
 #include "kvstore.h"
-#include "utils.h"
+#include "utils/utils.h"
 #include <unordered_map>
 #include <map>
 #include <chrono>

@@ -1,10 +1,11 @@
 #include "kvstore.h"
 #include <string>
+#include <cassert>
 
 
 std::string KVStore::SUFFIX = ".sst";
 
-KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir) {
+KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir),compactionLevel(0) {
     if (dataPath.back() != '/') {
         dataPath.push_back('/');
     }
@@ -66,6 +67,7 @@ void KVStore::put(key_t key, const value_t &s) {
         memTable->put(key, s);
     }
 }
+
 
 /**
  * Returns the (string) value of the given key.
@@ -131,6 +133,7 @@ bool KVStore::del(key_t key) {
  */
 void KVStore::reset() {
     timeStamp = 0;
+    compactionLevel = 0;
     memTable->reset();
     cacheTime.clear();
     cacheKey.clear();
@@ -182,6 +185,14 @@ void KVStore::scan(key_t key1, key_t key2, std::list<kv_t> &list) {
 }
 
 void KVStore::memCompaction() {
+    /*
+     * 这里为了复用代码 有两种情况
+     * 1 正常put 满了以后会compaction到第0层 向第1层检查
+     * 2 在compaction的时候借用put函数 满了之后写入第level层 不用向第1层检查
+     * 为了不影响接口 选择使用类中成员变量的方式进行条件的传递
+     * compactionLevel:表示当前即将写入的sstable存在level层
+     * timeCompation：若为0 当前写入的文件用最新的 若不为0 表示是compation 用之前的
+     */
     std::list<std::pair<uint64_t, std::string>> list;
     memTable->getList(list);
 // 头部 时间戳 数量 最大值 最小值 各8bytes
@@ -194,16 +205,12 @@ void KVStore::memCompaction() {
     key_min = list.front().first;
     key_max = list.back().first;
 
-    int level = 4;
-    if(timeStamp > 100)level=3;
-    if(timeStamp > 250)level=2;
-    if(timeStamp > 300)level=1;
-    if(timeStamp > 350)level=0;
-    std::string path = dataPath + "level-"+std::to_string(level)+"/";
+
+    std::string path = dataPath + "level-"+std::to_string(compactionLevel)+"/";
     if (!utils::dirExists(path)) {
         utils::mkdir(path.c_str());
     }
-    path.append(std::to_string(timeStamp).append(SUFFIX));
+    path.append(std::to_string(timeCompaction?timeCompaction:timeStamp).append(SUFFIX));
     std::ofstream f(path, std::ios::binary);
 
 //    std::cout << "[info]writeSST:" << timeStamp << " " << length << " " << key_min << " " << key_max << std::endl;
@@ -235,8 +242,9 @@ void KVStore::memCompaction() {
 //    cacheList.emplace_back(Cache(header, bloomFilter, indexList, path));
 //    caches[path] = Cache(header, bloomFilter, indexList);
     std::shared_ptr<CacheSST> cache = std::shared_ptr<CacheSST>(new CacheSST(path, header, bloomFilter, indexList));
-    cacheTime[0].insert(std::make_pair(timeStamp, cache));
-    cacheKey[0].insert(std::make_pair(key_min, cache));
+
+    cacheTime[compactionLevel].insert(std::make_pair(timeStamp, cache));
+    cacheKey[compactionLevel].insert(std::make_pair(key_min, cache));
     //所有value连续存
     for (auto const &kv: list) {
 //        f.write((char*)&kv.second,kv.second.length());
@@ -247,6 +255,86 @@ void KVStore::memCompaction() {
     f.close();
 //    read(path);
 
+    //compactionLevel==0 正常插入
+    //!=0 合并时借助同一个函数生成sstable
+    if(compactionLevel == 0 && cacheTime[0].size() > maxLevelSize(0)){
+        zeroCompaction();
+    }
+
+}
+void KVStore::zeroCompaction() {
+    compaction(0);
+}
+
+void KVStore::compaction(int level) {//level满了 向level+1合并
+    int max = maxLevelSize(level);
+    if(cacheTime[level].size() <= max){
+        return;//不需要compaction  结束递归
+    }
+    int count = 1;
+    CacheLevelKey cacheLevelKey;
+    for(auto const &cache:cacheTime[level]){//取时间戳最小的若干个  也就是最后的
+        if(count > max){
+            cacheLevelKey.insert(std::make_pair(cache.second->header->key_min,cache.second));
+        }
+        count++;
+    }
+
+    if(cacheTime.size() <= level+1){
+        cacheTime.emplace_back(CacheLevelTime());
+        cacheKey.emplace_back(CacheLevelKey());
+        std::string dirPath = dataPath+"level-"+std::to_string(level+1);
+        if(!utils::dirExists(dirPath)){
+            utils::mkdir(dirPath.c_str());
+        }
+    }
+
+    auto itup = cacheLevelKey.begin();
+    auto itdown = cacheKey[level+1].begin();
+
+    compactionLevel = level+1;
+    for(;itup!=cacheLevelKey.end();itup++){
+        std::shared_ptr<CacheSST> cache = itup->second;
+        timeCompaction = cache->header->timeStamp;
+        std::ifstream f(cache->path);
+        int size = cache->header->length;
+        Index *indexList = cache->indexList;
+        key_t key;
+        value_t value;
+        unsigned int offset;
+        int length;
+        char *c = nullptr;
+        for(int i = 1; i < size ; i++){
+            key = indexList[i-1].key;
+            offset = indexList[i-1].offset;
+            length = indexList[i].offset - offset;
+            f.seekg(offset);
+            c = new char[length+1];
+            c[length] = '\0';
+            value = std::string(c);
+            delete c;
+            put(key,value);
+        }
+        f>>value;
+        put(key,value);
+        f.close();
+    }
+    if(memTable->getLength()>0){
+        memCompaction();
+    }
+    compactionLevel = 0;
+    timeCompaction = 0;
+    if(level==1){
+//        std::cout<<cacheLevelKey.begin()->second->header->timeStamp<<std::endl;
+    }
+    //这些多出来的要从原来的缓存和文件中删除
+    for(auto const &cache:cacheLevelKey){
+        cacheTime[level].erase(cache.second->header->timeStamp);
+        cacheKey[level].erase(cache.first);
+        utils::rmfile(cache.second->path.c_str());
+    }
+
+    compaction(level+1);
 }
 
 void testBF(BloomFilter &bloomFilter, uint64_t begin, uint64_t end) {
@@ -317,6 +405,7 @@ std::shared_ptr<KVStore::CacheSST> KVStore::getCacheFromSST(const std::string &p
     f.read((char *) indexList, sizeof(Index) * header->length);
 
 //    caches[path] = Cache(header,bloomFilter,indexList);//这样会报错 需要默认构造函数 可能是复制过去？
+    f.close();
     return std::shared_ptr<CacheSST>(new CacheSST(path, header, bloomFilter, indexList));
 }
 
@@ -440,4 +529,8 @@ KVStore::scanInSST(const std::string &path, const Index *const indexList, const 
         delete[] c;
     }
     f.close();
+}
+
+int KVStore::maxLevelSize(int level) {
+    return 1<<(level+1);
 }
