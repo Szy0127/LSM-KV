@@ -27,6 +27,7 @@ void KVStore::loadSST()
             cacheKey.emplace_back(CacheLevelKey());
         }
         levelPath = dataPath + level + "/";
+        sstables.clear();
         utils::scanDir(levelPath, sstables);
         for (auto &sstable: sstables) {
             timeStamp_t t = std::stoull(sstable.substr(0, sstable.find(SUFFIX)));
@@ -193,7 +194,12 @@ void KVStore::memCompaction() {
     key_min = list.front().first;
     key_max = list.back().first;
 
-    std::string path = dataPath + "level-0/";
+    int level = 4;
+    if(timeStamp > 100)level=3;
+    if(timeStamp > 250)level=2;
+    if(timeStamp > 300)level=1;
+    if(timeStamp > 350)level=0;
+    std::string path = dataPath + "level-"+std::to_string(level)+"/";
     if (!utils::dirExists(path)) {
         utils::mkdir(path.c_str());
     }
