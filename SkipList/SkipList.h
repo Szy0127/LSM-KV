@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <iostream>
 #include <list>
-#include "types.h"
+#include "utils/types.h"
 
 
 // 这里的接口和kvstore_api都是一样的  但是不能继承  因为kvstore_api的构造函数是必须带文件夹路径的

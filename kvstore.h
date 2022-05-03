@@ -1,10 +1,10 @@
 #pragma once
 
 #include "kvstore_api.h"
-#include "SkipList.h"
-#include "BloomFilter.h"
-#include "utils.h"
-#include "types.h"
+#include "SkipList/SkipList.h"
+#include "BloomFilter/BloomFilter.h"
+#include "utils/utils.h"
+#include "utils/types.h"
 #include <fstream>
 #include <utility>
 #include <map>

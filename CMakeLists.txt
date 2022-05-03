@@ -6,18 +6,18 @@ set(CMAKE_CXX_STANDARD 14)
 include_directories(.)
 
 add_executable(lsm_kv
-        #correctness.cc
-        persistence.cc
+        test/correctness.cc
+#        test/persistence.cc
         kvstore.cc
         kvstore.h
         kvstore_api.h
-        SkipList.cpp
-        SkipList.h
-        BloomFilter.h
-        BloomFilter.cpp
-        MurmurHash3.h
+        SkipList/SkipList.cpp
+        SkipList/SkipList.h
+        BloomFilter/BloomFilter.h
+        BloomFilter/BloomFilter.cpp
+        utils/MurmurHash3.h
         #main.cpp
-        types.h
-        test.h
-        utils.h
+        utils/types.h
+        test/test.h
+        utils/utils.h
         )

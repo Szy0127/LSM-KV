@@ -9,8 +9,8 @@
 #include <vector>
 #include <functional>
 #include <fstream>
-#include "MurmurHash3.h"
-#include "types.h"
+#include "../utils/MurmurHash3.h"
+#include "../utils/types.h"
 class BloomFilter {
 public:
     static const int M = (10240-4)*8;//哈希函数范围 即总bitmap的bit数
