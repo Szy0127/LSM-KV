@@ -115,20 +115,14 @@ void reset(){
     store.reset();
 }
 void testds(){
-    using CacheLevelTime = std::map<timeStamp_t,int,std::greater<>>;
+    using CacheLevelTime = std::multimap<timeStamp_t,int,std::greater<>>;
     using CacheLevelKey = std::map<key_t,int,std::greater<>>;
 
     std::vector<CacheLevelTime> cacheTime;
     cacheTime.emplace_back(CacheLevelTime());
     cacheTime[0].insert(std::make_pair(1,1));
-    cacheTime.emplace_back(CacheLevelTime());
-    cacheTime[1].insert(std::make_pair(2,2));
-    cacheTime.emplace_back(CacheLevelTime());
-
-    std::cout<<cacheTime[0][1]<<cacheTime[1][2]<<cacheTime[0].count(1);
-    cacheTime[0].erase(1);
+    cacheTime[0].insert(std::make_pair(1,2));
     std::cout<<cacheTime[0].count(1);
-
 }
 int main() {
     testds();

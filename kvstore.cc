@@ -5,7 +5,7 @@
 
 std::string KVStore::SUFFIX = ".sst";
 
-KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir),compactionLevel(0) {
+KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir), compactionLevel(0), timeCompaction(0) {
     if (dataPath.back() != '/') {
         dataPath.push_back('/');
     }
@@ -14,8 +14,7 @@ KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir),compac
     loadSST();
 }
 
-void KVStore::loadSST()
-{
+void KVStore::loadSST() {
     //把所有sstable的索引部分都读入缓存 并且找到最后一个时间戳
     std::vector<std::string> levelDirs;
     std::vector<std::string> sstables;
@@ -23,7 +22,7 @@ void KVStore::loadSST()
     utils::scanDir(dataPath, levelDirs);
     int level_count = 0;
     for (auto &level: levelDirs) {
-        if(cacheTime.size() < level_count+1){
+        if (cacheTime.size() < level_count + 1) {
             cacheTime.emplace_back(CacheLevelTime());
             cacheKey.emplace_back(CacheLevelKey());
         }
@@ -36,8 +35,8 @@ void KVStore::loadSST()
                 timeStamp = t;
             }
             std::shared_ptr<CacheSST> cache = getCacheFromSST(levelPath + sstable);
-            cacheTime[level_count].insert(std::make_pair(t,cache));
-            cacheKey[level_count].insert(std::make_pair(cache->header->key_min,cache));
+            cacheTime[level_count].insert(std::make_pair(t, cache));
+            cacheKey[level_count].insert(std::make_pair(cache->header->key_min, cache));
         }
         level_count++;
     }
@@ -63,7 +62,6 @@ void KVStore::put(key_t key, const value_t &s) {
     if (HEADER_SIZE + BF_SIZE + sizeof(Index) * (memTable->getLength()) + memTable->getSize() >= MAX_SSTABLE_SIZE) {
         memTable->undo(key);
         memCompaction();
-        memTable->reset();
         memTable->put(key, s);
     }
 }
@@ -89,23 +87,26 @@ std::string KVStore::get(key_t key) {
     unsigned int offset;
     int length;
     bool find;
-//    std::cout<<key<<std::endl;
+//    std::cout << "finding"<<key << std::endl;
     for (auto const &cacheLine: cacheTime) {
-        for(auto const &cache:cacheLine){
+        for (auto const &cache: cacheLine) {
+//            std::cout << cache.second->header->timeStamp << " ";
             //在找到的同时拿到位置与大小信息
 //        std::cout<<cache.first<<" "<<cache.second.header->timeStamp<<std::endl;
             find = getValueInfo(*cache.second, key, offset, length);
             if (find) {
                 //根据文件名 位置 大小 直接读出信息
                 std::string res = getValueFromSST(cache.second->path, offset, length);
+//                std::cout<<"finish"<<std::endl;
+
                 if (res == DELETED) {
                     return NOTFOUND;
                 }
                 return res;
             }
+        }
     }
-
-    }
+//    std::cout<<"not found"<<std::endl;
     return NOTFOUND;
 
 }
@@ -117,13 +118,13 @@ std::string KVStore::get(key_t key) {
 bool KVStore::del(key_t key) {
 //    return memTable->del(key);
     if (get(key) == NOTFOUND) {
-        return false;//跳表和sstable中都没找到
+        return false;//跳表和sstable(缓存)中都没找到
     }
     if (memTable->get(key) != NOTFOUND) {
         memTable->del(key);//在跳表里 可以直接删
         return true;
     }
-    memTable->put(key, DELETED);
+    put(key, DELETED);
     return true;
 }
 
@@ -134,6 +135,7 @@ bool KVStore::del(key_t key) {
 void KVStore::reset() {
     timeStamp = 0;
     compactionLevel = 0;
+    timeCompaction = 0;
     memTable->reset();
     cacheTime.clear();
     cacheKey.clear();
@@ -163,21 +165,24 @@ void KVStore::scan(key_t key1, key_t key2, std::list<kv_t> &list) {
     KVheap scanResult;
     memTable->scan(key1, key2, scanResult);
 
-    for (auto const &cacheLine: cacheTime) {{
-        for(auto const&cache:cacheLine){
-            if (key1 > cache.second->header->key_max || key2 < cache.second->header->key_min) {
-                continue;
-            }
-            //第一个大于等于key1的key的位置
-            uint64_t begin = key1 <= cache.second->header->key_min ? 0 : binarySearchScan(cache.second->indexList,
-                                                                                         cache.second->header->length,
-                                                                                         key1, true);
-            uint64_t end = key2 >= cache.second->header->key_max ? cache.second->header->length - 1 : binarySearchScan(
-                    cache.second->indexList, cache.second->header->length, key2, false);
-            scanInSST(cache.second->path, cache.second->indexList, begin, end, end == cache.second->header->length - 1,
-                      scanResult);
+    for (auto const &cacheLine: cacheTime) {
+        {
+            for (auto const &cache: cacheLine) {
+                if (key1 > cache.second->header->key_max || key2 < cache.second->header->key_min) {
+                    continue;
+                }
+                //第一个大于等于key1的key的位置
+                uint64_t begin = key1 <= cache.second->header->key_min ? 0 : binarySearchScan(cache.second->indexList,
+                                                                                              cache.second->header->length,
+                                                                                              key1, true);
+                uint64_t end =
+                        key2 >= cache.second->header->key_max ? cache.second->header->length - 1 : binarySearchScan(
+                                cache.second->indexList, cache.second->header->length, key2, false);
+                scanInSST(cache.second->path, cache.second->indexList, begin, end,
+                          end == cache.second->header->length - 1,
+                          scanResult);
 //        std::cout << cache.second.header->key_min << " " << cache.second.header->key_max << " " << begin << " " << end<< std::endl;
-        }
+            }
         }
     }
 
@@ -193,10 +198,13 @@ void KVStore::memCompaction() {
      * compactionLevel:表示当前即将写入的sstable存在level层
      * timeCompation：若为0 当前写入的文件用最新的 若不为0 表示是compation 用之前的
      */
+    if (memTable->getSize() <= 0) {
+        return;
+    }
     std::list<std::pair<uint64_t, std::string>> list;
     memTable->getList(list);
 // 头部 时间戳 数量 最大值 最小值 各8bytes
-    timeStamp++;
+    timeStamp_t t = timeCompaction ? timeCompaction : ++timeStamp;
     uint64_t length;
     key_t key_min, key_max;
 
@@ -206,15 +214,15 @@ void KVStore::memCompaction() {
     key_max = list.back().first;
 
 
-    std::string path = dataPath + "level-"+std::to_string(compactionLevel)+"/";
+    std::string path = dataPath + "level-" + std::to_string(compactionLevel) + "/";
     if (!utils::dirExists(path)) {
         utils::mkdir(path.c_str());
     }
-    path.append(std::to_string(timeCompaction?timeCompaction:timeStamp).append(SUFFIX));
+    path.append(std::to_string(t).append("_"+std::to_string(cacheTime[compactionLevel].count(t))).append(SUFFIX));
     std::ofstream f(path, std::ios::binary);
 
 //    std::cout << "[info]writeSST:" << timeStamp << " " << length << " " << key_min << " " << key_max << std::endl;
-    SSTheader *header = new SSTheader(timeStamp, length, key_min, key_max);
+    SSTheader *header = new SSTheader(t, length, key_min, key_max);
     f.write((char *) header, HEADER_SIZE);
 
 
@@ -243,7 +251,7 @@ void KVStore::memCompaction() {
 //    caches[path] = Cache(header, bloomFilter, indexList);
     std::shared_ptr<CacheSST> cache = std::shared_ptr<CacheSST>(new CacheSST(path, header, bloomFilter, indexList));
 
-    cacheTime[compactionLevel].insert(std::make_pair(timeStamp, cache));
+    cacheTime[compactionLevel].insert(std::make_pair(t, cache));
     cacheKey[compactionLevel].insert(std::make_pair(key_min, cache));
     //所有value连续存
     for (auto const &kv: list) {
@@ -254,87 +262,87 @@ void KVStore::memCompaction() {
 
     f.close();
 //    read(path);
+    memTable->reset();
 
     //compactionLevel==0 正常插入
     //!=0 合并时借助同一个函数生成sstable
-    if(compactionLevel == 0 && cacheTime[0].size() > maxLevelSize(0)){
+    if (compactionLevel == 0 && cacheTime[0].size() > maxLevelSize(0)) {
         zeroCompaction();
     }
 
 }
+
 void KVStore::zeroCompaction() {
     compaction(0);
 }
 
 void KVStore::compaction(int level) {//level满了 向level+1合并
     int max = maxLevelSize(level);
-    if(cacheTime[level].size() <= max){
+    if (cacheTime[level].size() <= max) {
         return;//不需要compaction  结束递归
     }
     int count = 1;
     CacheLevelKey cacheLevelKey;
-    for(auto const &cache:cacheTime[level]){//取时间戳最小的若干个  也就是最后的
-        if(count > max){
-            cacheLevelKey.insert(std::make_pair(cache.second->header->key_min,cache.second));
+    for (auto const &cache: cacheTime[level]) {//取时间戳最小的若干个  也就是最后的
+        if (count > max) {
+            cacheLevelKey.insert(std::make_pair(cache.second->header->key_min, cache.second));
         }
         count++;
     }
 
-    if(cacheTime.size() <= level+1){
+    if (cacheTime.size() <= level + 1) {
         cacheTime.emplace_back(CacheLevelTime());
         cacheKey.emplace_back(CacheLevelKey());
-        std::string dirPath = dataPath+"level-"+std::to_string(level+1);
-        if(!utils::dirExists(dirPath)){
+        std::string dirPath = dataPath + "level-" + std::to_string(level + 1);
+        if (!utils::dirExists(dirPath)) {
             utils::mkdir(dirPath.c_str());
         }
     }
 
     auto itup = cacheLevelKey.begin();
-    auto itdown = cacheKey[level+1].begin();
+    auto itdown = cacheKey[level + 1].begin();
 
-    compactionLevel = level+1;
-    for(;itup!=cacheLevelKey.end();itup++){
+    compactionLevel = level + 1;
+    for (; itup != cacheLevelKey.end(); itup++) {
         std::shared_ptr<CacheSST> cache = itup->second;
         timeCompaction = cache->header->timeStamp;
         std::ifstream f(cache->path);
-        int size = cache->header->length;
+        auto size = cache->header->length;
         Index *indexList = cache->indexList;
         key_t key;
         value_t value;
         unsigned int offset;
-        int length;
+        unsigned int length;
         char *c = nullptr;
-        for(int i = 1; i < size ; i++){
-            key = indexList[i-1].key;
-            offset = indexList[i-1].offset;
+        for (auto i = 1; i < size; i++) {
+            key = indexList[i - 1].key;
+            offset = indexList[i - 1].offset;
             length = indexList[i].offset - offset;
             f.seekg(offset);
-            c = new char[length+1];
+            c = new char[length + 1];
+            f.read(c, length);
             c[length] = '\0';
             value = std::string(c);
-            delete c;
-            put(key,value);
+            delete[] c;
+            put(key, value);
         }
-        f>>value;
-        put(key,value);
+        key = indexList[size-1].key;
+        f >> value;
+        put(key, value);
         f.close();
     }
-    if(memTable->getLength()>0){
-        memCompaction();
-    }
+    memCompaction();
     compactionLevel = 0;
     timeCompaction = 0;
-    if(level==1){
-//        std::cout<<cacheLevelKey.begin()->second->header->timeStamp<<std::endl;
-    }
+
     //这些多出来的要从原来的缓存和文件中删除
-    for(auto const &cache:cacheLevelKey){
+    for (auto const &cache: cacheLevelKey) {
         cacheTime[level].erase(cache.second->header->timeStamp);
         cacheKey[level].erase(cache.first);
         utils::rmfile(cache.second->path.c_str());
     }
 
-    compaction(level+1);
+    compaction(level + 1);
 }
 
 void testBF(BloomFilter &bloomFilter, uint64_t begin, uint64_t end) {
@@ -504,7 +512,7 @@ KVStore::scanInSST(const std::string &path, const Index *const indexList, const 
     unsigned int length;
     char *c;
     for (uint64_t i = begin; i < end; i++) {
-        length = indexList[i+1].offset - offset;
+        length = indexList[i + 1].offset - offset;
         c = new char[length + 1];
         f.read(c, length);
         c[length] = '\0';
@@ -532,5 +540,5 @@ KVStore::scanInSST(const std::string &path, const Index *const indexList, const 
 }
 
 int KVStore::maxLevelSize(int level) {
-    return 1<<(level+1);
+    return 1 << (level + 1);
 }

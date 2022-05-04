@@ -8,6 +8,7 @@ include_directories(.)
 add_executable(lsm_kv
         test/correctness.cc
 #        test/persistence.cc
+#        main.cpp
         kvstore.cc
         kvstore.h
         kvstore_api.h
@@ -16,7 +17,6 @@ add_executable(lsm_kv
         BloomFilter/BloomFilter.h
         BloomFilter/BloomFilter.cpp
         utils/MurmurHash3.h
-        #main.cpp
         utils/types.h
         test/test.h
         utils/utils.h

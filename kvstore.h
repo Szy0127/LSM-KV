@@ -17,7 +17,7 @@ class KVStore : public KVStoreAPI {
 public:
     static const int HEADER_SIZE = 32;
     static const int BF_SIZE = 10240;
-    static const int MAX_SSTABLE_SIZE = 2*1024*1024; //必须大于32+10240
+    static const int MAX_SSTABLE_SIZE = 2*1024*1024; //必须大于32+10240  单位byte
     static std::string SUFFIX;
 private:
     struct SSTheader{
@@ -52,7 +52,7 @@ private:
 
     //遍历缓存 如果找到key 需要去文件读value 所以需要知道文件的完整路径
     //如果用路径作为key 需要自定义排序函数 可能插入操作会比较费时
-    using CacheLevelTime = std::map<timeStamp_t,std::shared_ptr<CacheSST>,std::greater<>>;
+    using CacheLevelTime = std::multimap<timeStamp_t,std::shared_ptr<CacheSST>,std::greater<>>;
     using CacheLevelKey = std::map<key_t,std::shared_ptr<CacheSST>,std::greater<>>;
 
     std::vector<CacheLevelTime> cacheTime;
