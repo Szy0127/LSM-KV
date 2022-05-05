@@ -316,6 +316,7 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
     if (cacheTime[level].size() <= max) {
         return;//不需要compaction  结束递归
     }
+
     if (cacheTime.size() <= level + 1) {//如果level是最后一层 需要向下再新建一层
         cacheTime.emplace_back(CacheLevelTime());
 //        cacheKey.emplace_back(CacheLevelKey());
@@ -380,25 +381,37 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
     int i = 0;
     int j = 0;
     timeCompaction = timeUp > timeDown ? timeUp : timeDown;
-    if(cacheLevelKeyDown.size()>0 && cacheDown->path=="../data/level-1/16_48.sst"){
 
-        std::cout<<"compact"<<cacheUp->path<<" "<<cacheDown->path<<"to"<<timeCompaction<<std::endl;
-    }
+//    std::cout<<"compact"<<cacheUp->path<<" "<<cacheDown->path<<"to"<<timeCompaction<<std::endl;
+
+    bool last_level = (level == cacheTime.size()-2);//最后一层删delete
     //两路归并
     while (i < sizeUp && j < sizeDown) {
         keyUp = indexListUp[i].key;
         keyDown = indexListDown[j].key;
-        if (keyUp < keyDown) {//如果相等 优先put时间戳小（下层）的 这样时间戳大的会覆盖小的（不存在被分割开的情况）
+        if (keyUp < keyDown) {
             length = (i < sizeUp - 1) ? indexListUp[i + 1].offset - indexListUp[i].offset : -1;
             value = readStringFromFileByLength(fup, length);
-            timeCompaction = timeUp > timeCompaction ? timeUp : timeCompaction;//每次操作都更新 防止剩余情况
-            put(keyUp, value);
+            if(!last_level || value != DELETED){//最后一层不需要保留delete标记
+                timeCompaction = timeUp > timeCompaction ? timeUp : timeCompaction;//每次操作都更新 防止剩余情况
+                put(keyUp, value);
+            }
+
             i++;
+            if(keyUp == keyDown){//相等的时候直接忽略时间戳大的 如果一前一后put会在临界点引发问题
+//                readStringFromFileByLength(fdown, length);// 用这个方法一模一样读出来 会指针错 debug也看不出错那
+                if(j < sizeDown-1){//如果没到末尾需要跳过这个kv 如果到了就不用管了
+                    fdown.seekg(indexListDown[j+1].offset);
+                }
+                j++;
+            }
         } else {
             length = (j < sizeDown - 1) ? indexListDown[j + 1].offset - indexListDown[j].offset : -1;
             value = readStringFromFileByLength(fdown, length);
-            timeCompaction = timeDown > timeCompaction ? timeDown : timeCompaction;
-            put(keyDown, value);
+            if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+                timeCompaction = timeDown > timeCompaction ? timeDown : timeCompaction;
+                put(keyDown, value);
+            }
             j++;
         }
         if (i == sizeUp) {
@@ -425,8 +438,10 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
             keyUp = indexListUp[i].key;
             length = (i < sizeUp - 1) ? indexListUp[i + 1].offset - indexListUp[i].offset : -1;
             value = readStringFromFileByLength(fup, length);
-            timeCompaction = timeUp > timeCompaction ? timeUp : timeCompaction;
-            put(keyUp, value);
+            if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+                timeCompaction = timeUp > timeCompaction ? timeUp : timeCompaction;
+                put(keyUp, value);
+            }
         }
         itup++;
         if (itup == cacheLevelKeyUp.end()) {
@@ -441,8 +456,10 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
             keyDown = indexListDown[j].key;
             length = (j < sizeDown - 1) ? indexListDown[j + 1].offset - indexListDown[j].offset : -1;
             value = readStringFromFileByLength(fdown, length);
-            timeCompaction = timeDown > timeCompaction ? timeDown : timeCompaction;
-            put(keyDown, value);
+            if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+                timeCompaction = timeDown > timeCompaction ? timeDown : timeCompaction;
+                put(keyDown, value);
+            }
         }
         itdown++;
         if (itdown == cacheLevelKeyDown.end()) {
