@@ -123,6 +123,11 @@ void testds(){
     cacheTime[0].insert(std::make_pair(1,1));
     cacheTime[0].insert(std::make_pair(1,2));
     std::cout<<cacheTime[0].count(1);
+    std::cout<<(cacheTime[0].begin()==cacheTime[0].end());
+    cacheTime[0].erase(1);
+    std::cout<<cacheTime[0].count(1);
+    std::cout<<(cacheTime[0].begin()==cacheTime[0].end());
+
 }
 int main() {
     testds();
