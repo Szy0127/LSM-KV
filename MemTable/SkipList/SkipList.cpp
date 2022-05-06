@@ -61,7 +61,7 @@ void SkipList::update_clear() {
 }
 
 
-void SkipList::put(uint64_t key, const std::string &value) {
+void SkipList::put(const key_t &key, const value_t &value) {
     update_clear();
     SKNode *x = head;
     for (int i = level - 1; i >= 0; i--) {
@@ -95,7 +95,7 @@ void SkipList::put(uint64_t key, const std::string &value) {
 }
 
 
-std::string SkipList::get(uint64_t key) {
+value_t SkipList::get(const key_t &key)const{
     SKNode *x = head;
     for (int i = level - 1; i >= 0; i--) {
         while (x->forwards[i]->key < key) {
@@ -110,7 +110,7 @@ std::string SkipList::get(uint64_t key) {
     }
 }
 
-bool SkipList::del(uint64_t key) {
+bool SkipList::del(const key_t &key) {
     update_clear();
     SKNode *x = head;
     for (int i = level - 1; i >= 0; i--) {
@@ -138,7 +138,7 @@ bool SkipList::del(uint64_t key) {
     return true;
 }
 
-void SkipList::scan(uint64_t key1, uint64_t key2, KVheap &heap) {
+void SkipList::scan(const key_t &key1, const key_t &key2, KVheap &heap) {
     SKNode *x = head;
     for (int i = MAX_LEVEL - 1; i >= 0; i--) {
         while (x->forwards[i]->key < key1) {

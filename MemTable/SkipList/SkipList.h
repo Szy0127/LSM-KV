@@ -8,11 +8,11 @@
 #include <iostream>
 #include <list>
 #include "utils/types.h"
-
+#include "MemTable/MemTable.h"
 
 // 这里的接口和kvstore_api都是一样的  但是不能继承  因为kvstore_api的构造函数是必须带文件夹路径的
 //但是skiplist只是实现了内存中的操作 并不需要路径 所以还是单独写
-class SkipList {
+class SkipList :public MemTable{
 public:
     static int MAX_LEVEL;//L(N) = log(1/p)(n)
     static double p;
@@ -56,34 +56,28 @@ private:
     static int randomLevel();
 
     int level;
-public:
-    SkipList();
-
     void init();
-
-    ~SkipList();
-
     void finish();
 
-    void put(key_t key, const value_t &value);
+public:
+    SkipList();
+    ~SkipList();
 
-    value_t get(key_t key);
-
+    void put(const key_t &key, const value_t &value)override;
+    value_t get(const key_t &key)const override;
 
     //删除操作需更新key的范围
-    bool del(key_t key);
-
-    void scan(key_t key1, key_t key2, KVheap &heap);
-
-    void reset();
+    bool del(const key_t &key)override;
+    void scan(const key_t &key1, const key_t &key2, KVheap &heap)override;
+    void reset()override;
 
 
     //如果上个操作是覆盖 则需要恢复value
     //如果上个操作是插入 则删除该键
-    void undo(const key_t &key);
+    void undo(const key_t &key)override;
 
-    void getList(std::list<kv_t> &list);
+    void getList(std::list<kv_t> &list)override;
 
-    uint64_t getLength() const;
-    unsigned int getSize() const;
+    uint64_t getLength() const override;
+    unsigned int getSize() const override;
 };

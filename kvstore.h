@@ -1,7 +1,7 @@
 #pragma once
 
 #include "kvstore_api.h"
-#include "SkipList/SkipList.h"
+#include "MemTable/SkipList/SkipList.h"
 #include "BloomFilter/BloomFilter.h"
 #include "utils/utils.h"
 #include "utils/types.h"
@@ -10,6 +10,7 @@
 #include <map>
 #include <queue>
 #include <memory>
+
 
 
 class KVStore : public KVStoreAPI {
@@ -63,36 +64,49 @@ private:
     int fileSuffix;//每个文件加一个全局唯一id方便判断
     timeStamp_t timeStamp;//新插入元素的时间戳
     timeStamp_t timeCompaction;//合并时最大的时间戳；
-    SkipList *memTable;
+    MemTable *memTable;
     int compactionLevel;//正常情况是0 表示在level0插入memTable满了之后的sstable
 
-    bool isIntersect(key_t &l1,key_t &r1, key_t &l2, key_t &r2);//判断两个区间是否相交
+    static bool isIntersect(key_t &l1,key_t &r1, key_t &l2, key_t &r2);//判断两个区间是否相交
 
+
+    //memtable-->sstable
     void memCompaction();
+
+    //0-->1 compaction   4路
     void zeroCompaction();
-    void compaction(int level);//level --> level+1
+
+    // i--> i+1 (i>=1) 2路
+    void compaction(int level);
 
     //上层与下层归并排序 由于key不相交 最多2路 最后一层需要删delete
     void mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp,CacheLevelKey &cacheLevelKeyDown,bool last_level);
 
     static int maxLevelSize(int level);
+
+    //搜索key时二分查找index
     static uint64_t binarySearchGet(const Index* indexList, uint64_t length, const key_t &key);
     static uint64_t binarySearchScan(const Index* indexList, uint64_t length, const key_t &key,bool begin);
 
     //若找到key 返回true 并传递位置与长度 如果长度是-1表示到文件末尾
     static bool getValueInfo(const CacheSST &cache,const key_t &key,unsigned int &offset,int &length);
 
+    //loadSST时使用
     static std::shared_ptr<CacheSST> getCacheFromSST(const std::string &path);
 
     //last是表示scan有没有扫描到文件末尾 最后一个的读取处理方式不同
     static void scanInSST(const std::string &path,const Index* indexList,const uint64_t &begin,const uint64_t &end,bool last,KVheap &heap);
 
+    //初始化时使用
     void loadSST();
+
     //在确定好位置的情况下直接读取指定长度 如果length是-1表示最后一个（文件末尾）
     static value_t readStringFromFileByLength(std::ifstream &f, int length);
 
+    //mergeSort的时候辅助使用
     void updateIterInfo(std::shared_ptr<CacheSST> &cache,timeStamp_t &t,std::ifstream &f,uint64_t &size,Index* &indexList);
-    void removeSST(CacheLevelKey::iterator &cacheIt,int level);//删除文件 同时删除缓存
+    //compaction结束 删除文件 同时删除缓存
+    void removeSST(CacheLevelKey::iterator &cacheIt,int level);
 public:
 	KVStore(const std::string &dir);
 
