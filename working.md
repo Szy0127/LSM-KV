@@ -191,3 +191,12 @@ erase 会全删
 
 错误现象：并不会报任何错，而是会正常运行，测试错误的结果随机，run和debug情况不同，指针异常
 
+
+
+key相同时，由于归并排序的操作，一定是相邻的，如果先put时间戳小的后put大的，存在的问题是，memtable只剩2，put一个value是1，没超，又put一个delete 超了，会把1直接写入sstable delete存入另一个sstable 两个时间戳一样没法比
+
+
+
+现在达成：level0只放一个进入level1 两路归并 key不相交 通过两个测试
+
+待完成：level0特殊的4路归并  实验报告

@@ -72,6 +72,9 @@ private:
     void zeroCompaction();
     void compaction(int level);//level --> level+1
 
+    //上层与下层归并排序 由于key不相交 最多2路 最后一层需要删delete
+    void mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp,CacheLevelKey &cacheLevelKeyDown,bool last_level);
+
     static int maxLevelSize(int level);
     static uint64_t binarySearchGet(const Index* indexList, uint64_t length, const key_t &key);
     static uint64_t binarySearchScan(const Index* indexList, uint64_t length, const key_t &key,bool begin);

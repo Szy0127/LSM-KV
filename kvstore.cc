@@ -310,46 +310,15 @@ value_t KVStore::readStringFromFileByLength(std::ifstream &f, int length) {
 
 }
 
-
-void KVStore::compaction(int level) {//level满了 向level+1合并
-    int max = maxLevelSize(level);
-    if (cacheTime[level].size() <= max) {
-        return;//不需要compaction  结束递归
-    }
-
-    if (cacheTime.size() <= level + 1) {//如果level是最后一层 需要向下再新建一层
-        cacheTime.emplace_back(CacheLevelTime());
-//        cacheKey.emplace_back(CacheLevelKey());
-        std::string dirPath = dataPath + "level-" + std::to_string(level + 1);
-        if (!utils::dirExists(dirPath)) {
-            utils::mkdir(dirPath.c_str());
-        }
-    }
-
-    int count = 1;
-    CacheLevelKey cacheLevelKeyUp;
-    for (auto const &cache: cacheTime[level]) {//取时间戳最小的若干个  也就是最后的
-        if (count > max) {
-            cacheLevelKeyUp.insert(std::make_pair(cache.second->header->key_min, cache.second));
-        }
-        count++;
-    }
-    CacheLevelKey cacheLevelKeyDown;
-    for (auto const &cacheDown: cacheTime[level + 1]) {//找到下层与上层key有相交的部分进行合并
-        for (auto const &cacheUp: cacheLevelKeyUp) {
-            key_t keyMinDown = cacheDown.second->header->key_min;
-            key_t keyMaxDown = cacheDown.second->header->key_max;
-            key_t keyMinUp = cacheUp.second->header->key_min;
-            key_t keyMaxUp = cacheUp.second->header->key_max;
-            if (isIntersect(keyMinDown, keyMaxDown, keyMinUp, keyMaxUp)) {
-                cacheLevelKeyDown.insert(std::make_pair(keyMinDown, cacheDown.second));
-                break;
-            }
-        }
-    }
-
-
-    compactionLevel = level + 1;//决定memcompation保存文件的位置
+/*
+ *
+ * 准备好归并排序需要的所有局部变量
+ * 开始归并排序 当一个文件结束后更新变量 继续
+ * 当一层所有文件合并完后  继续更新另一层的文件
+ * 剩余存在memtable中的kv存入sstable中
+ */
+void KVStore::mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cacheLevelKeyDown,bool last_level)
+{
     auto itup = cacheLevelKeyUp.begin();
     auto itdown = cacheLevelKeyDown.begin();
 
@@ -357,19 +326,19 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
     std::shared_ptr<CacheSST> cacheUp = itup->second;
     std::shared_ptr<CacheSST> cacheDown = itdown->second;
 
-    timeStamp_t timeUp = 0;// = cacheUp->header->timeStamp;
+    timeStamp_t timeUp = 0;
     timeStamp_t timeDown = 0;//便于在下层没有文件需要合并时选择时间戳
-    std::ifstream fup;//(cacheUp->path);
-    std::ifstream fdown;//(cacheDown->path);
+    std::ifstream fup;
+    std::ifstream fdown;
 
-    uint64_t sizeUp = 0;// = cacheUp->header->length;
-    uint64_t sizeDown = 0;// = cacheDown->header->length;
+    uint64_t sizeUp = 0;//
+    uint64_t sizeDown = 0;// 如果下层没有的话 j==sizeDown 会跳过归并
 
     Index *indexListUp;// = cacheUp->indexList;
     Index *indexListDown;// = cacheDown->indexList;
 
     updateIterInfo(cacheUp, timeUp, fup, sizeUp, indexListUp);
-    if (!cacheLevelKeyDown.empty()) {
+    if (!cacheLevelKeyDown.empty()) {//如果下层没有需要合并的实际上只要移动sstable就行 但是utils里没有给不同平台下的移动文件函数
         updateIterInfo(cacheDown, timeDown, fdown, sizeDown, indexListDown);
     }
 
@@ -384,7 +353,6 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
 
 //    std::cout<<"compact"<<cacheUp->path<<" "<<cacheDown->path<<"to"<<timeCompaction<<std::endl;
 
-    bool last_level = (level == cacheTime.size()-2);//最后一层删delete
     //两路归并
     while (i < sizeUp && j < sizeDown) {
         keyUp = indexListUp[i].key;
@@ -472,9 +440,58 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
     fup.close();
     fdown.close();
     memCompaction();
-
-    compactionLevel = 0;
     timeCompaction = 0;
+}
+/*
+ * 检查是否需要合并
+ * 如果是最后一层向下 新开一层
+ * 找到上层时间戳最小的若干个 并按key排序
+ * 找到下层与上层key相交的若干个 并按key排序
+ * 归并排序
+ * 删除两层中被合并的文件及缓存
+ * 继续向下合并
+ *
+ *
+ */
+void KVStore::compaction(int level) {//level满了 向level+1合并
+    int max = maxLevelSize(level);
+    if (cacheTime[level].size() <= max) {
+        return;//不需要compaction  结束递归
+    }
+
+    if (cacheTime.size() <= level + 1) {//如果level是最后一层 需要向下再新建一层
+        cacheTime.emplace_back(CacheLevelTime());
+//        cacheKey.emplace_back(CacheLevelKey());
+        std::string dirPath = dataPath + "level-" + std::to_string(level + 1);
+        if (!utils::dirExists(dirPath)) {
+            utils::mkdir(dirPath.c_str());
+        }
+    }
+
+    int count = 1;
+    CacheLevelKey cacheLevelKeyUp;
+    for (auto const &cache: cacheTime[level]) {//取时间戳最小的若干个  也就是最后的
+        if (count > max) {
+            cacheLevelKeyUp.insert(std::make_pair(cache.second->header->key_min, cache.second));
+        }
+        count++;
+    }
+    CacheLevelKey cacheLevelKeyDown;
+    for (auto const &cacheDown: cacheTime[level + 1]) {//找到下层与上层key有相交的部分进行合并
+        for (auto const &cacheUp: cacheLevelKeyUp) {
+            auto headerUp = cacheUp.second->header;
+            auto headerDown = cacheDown.second->header;
+            if (isIntersect(headerUp->key_min, headerUp->key_max, headerDown->key_min, headerDown->key_max)) {
+                cacheLevelKeyDown.insert(std::make_pair(headerDown->key_min, cacheDown.second));
+                break;
+            }
+        }
+    }
+
+    compactionLevel = level + 1;//决定memcompation保存文件的位置
+    bool last_level = (level == cacheTime.size()-2);//最后一层删delete
+    mergeSort2Ways(cacheLevelKeyUp,cacheLevelKeyDown,last_level);
+    compactionLevel = 0;
 
     //这些多出来的要从原来的缓存和文件中删除 新加入的缓存会在memCompation中自动进行
     for(auto it = cacheLevelKeyUp.begin();it!=cacheLevelKeyUp.end();it++){
