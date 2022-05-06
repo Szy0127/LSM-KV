@@ -58,10 +58,10 @@ private:
     //合并时下层需要按key排序
     using CacheLevelKey = std::map<key_t,std::shared_ptr<CacheSST>,std::less<>>;
 
-    std::vector<CacheLevelTime> cacheTime;
+    std::vector<CacheLevelTime> cacheAllSST;
 //    std::vector<CacheLevelKey> cacheKey;
 
-    int fileSuffix;//每个文件加一个全局唯一id方便判断
+    timeStamp_t fileSuffix;//每个文件加一个全局唯一id方便判断
     timeStamp_t timeStamp;//新插入元素的时间戳
     timeStamp_t timeCompaction;//合并时最大的时间戳；
     MemTable *memTable;
@@ -88,8 +88,9 @@ private:
     static uint64_t binarySearchGet(const Index* indexList, uint64_t length, const key_t &key);
     static uint64_t binarySearchScan(const Index* indexList, uint64_t length, const key_t &key,bool begin);
 
-    //若找到key 返回true 并传递位置与长度 如果长度是-1表示到文件末尾
-    static bool getValueInfo(const CacheSST &cache,const key_t &key,unsigned int &offset,int &length);
+    //若找到key 返回true 并传递位置与长度
+    //由于length由后一个的offset计算出 最后一个无法知道长度 如果使用-1表示需要用signed 导致narrow的问题 所以增加last变量
+    static bool getValueInfo(const CacheSST &cache,const key_t &key,unsigned int &offset,unsigned int &length,bool &last);
 
     //loadSST时使用
     static std::shared_ptr<CacheSST> getCacheFromSST(const std::string &path);
@@ -101,10 +102,10 @@ private:
     void loadSST();
 
     //在确定好位置的情况下直接读取指定长度 如果length是-1表示最后一个（文件末尾）
-    static value_t readStringFromFileByLength(std::ifstream &f, int length);
+    static value_t readStringFromFileByLength(std::ifstream &f, unsigned int length,bool last=false);
 
     //mergeSort的时候辅助使用
-    void updateIterInfo(std::shared_ptr<CacheSST> &cache,timeStamp_t &t,std::ifstream &f,uint64_t &size,Index* &indexList);
+    static void updateIterInfo(std::shared_ptr<CacheSST> &cache,timeStamp_t &t,std::ifstream &f,uint64_t &size,Index* &indexList);
     //compaction结束 删除文件 同时删除缓存
     void removeSST(CacheLevelKey::iterator &cacheIt,int level);
 public:
@@ -122,5 +123,4 @@ public:
 
 	void scan(key_t key1, key_t key2, std::list<kv_t> &list) override;
 
-    void read(std::string path);
 };

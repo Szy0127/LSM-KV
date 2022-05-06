@@ -10,6 +10,7 @@
 class MemTable{
 public:
     MemTable()= default;
+    virtual ~MemTable(){};
 
     //5个kvstore需要实现的接口 memtable也需要实现
 

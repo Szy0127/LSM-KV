@@ -61,7 +61,7 @@ private:
 
 public:
     SkipList();
-    ~SkipList();
+    ~SkipList() override;
 
     void put(const key_t &key, const value_t &value)override;
     value_t get(const key_t &key)const override;
