@@ -165,7 +165,7 @@ void KVStore::reset() {
     utils::scanDir(dataPath, levelDir);
     for (auto &level: levelDir) {
         levelPath = dataPath + level + '/';
-        std::cout<<levelPath<<std::endl;
+//        std::cout<<levelPath<<std::endl;
         files.clear();
         utils::scanDir(levelPath, files);
         for (auto &file: files) {
