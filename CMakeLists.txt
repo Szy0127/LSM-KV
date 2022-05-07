@@ -6,9 +6,8 @@ set(CMAKE_CXX_STANDARD 14)
 include_directories(.)
 
 add_executable(lsm_kv
-#        test/correctness.cc
-        test/persistence.cc
-#        main.cpp
+
+        main.cpp
         kvstore.cc
         kvstore.h
         kvstore_api.h
@@ -19,6 +18,5 @@ add_executable(lsm_kv
         MemTable/SkipList/SkipList.cpp
         MemTable/SkipList/SkipList.h
         utils/types.h
-        test/test.h
         utils/utils.h
         )
