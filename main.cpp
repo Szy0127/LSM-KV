@@ -130,6 +130,7 @@ void testds(){
 
 }
 int main() {
-    testds();
+    KVStore kvStore("../data");
+    kvStore.reset();
 }
 

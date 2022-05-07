@@ -8,6 +8,9 @@ std::string KVStore::SUFFIX = ".sst";
 
 KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir), compactionLevel(0), timeCompaction(0),
                                            fileSuffix(0), timeStamp(1) {
+    if(!utils::dirExists(dir)){
+        utils::mkdir(dir.c_str());
+    }
     if (dataPath.back() != '/') {
         dataPath.push_back('/');
     }
@@ -162,6 +165,8 @@ void KVStore::reset() {
     utils::scanDir(dataPath, levelDir);
     for (auto &level: levelDir) {
         levelPath = dataPath + level + '/';
+        std::cout<<levelPath<<std::endl;
+        files.clear();
         utils::scanDir(levelPath, files);
         for (auto &file: files) {
 //            std::cout<<file<<" ";
@@ -169,6 +174,7 @@ void KVStore::reset() {
         }
         utils::rmdir(levelPath.c_str());
     }
+    utils::rmdir(dataPath.c_str());
     cacheAllSST.emplace_back(CacheLevelTime());
 //    cacheKey.emplace_back(CacheLevelKey());
 }
