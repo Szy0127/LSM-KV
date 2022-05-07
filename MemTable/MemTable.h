@@ -6,7 +6,12 @@
 #define LSM_KV_MEMTABLE_H
 
 #include "utils/types.h"
-
+/*
+ * 由于memtable可替换  定义一个抽象类
+ * 需要实现常规的增删改查功能
+ * 提供其他工具函数方便compaction
+ *
+ */
 class MemTable{
 public:
     MemTable()= default;

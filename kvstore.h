@@ -31,7 +31,7 @@ private:
     };
     struct Index{
         key_t key;
-        unsigned int offset;//如果不用8byte 后面4byte的pad数据无法控制
+        unsigned int offset;// 后面4byte的pad数据无法控制
     };//为了存储的方便 把key和offset定义成一个结构体 但是这样实际上浪费了空间 因为8byte和4byte需要对齐 pad4byte
     struct CacheSST{
         std::string path;//对应sstable的路径
@@ -55,11 +55,11 @@ private:
     //向下合并时选择时间戳最小的若干个
     using CacheLevelTime = std::multimap<timeStamp_t,std::shared_ptr<CacheSST>,std::greater<>>;
 
-    //合并时下层需要按key排序
+    //合并时下层需要按key排序 除了第0层可能会重复  其他都不会重复 但是为了复用代码 统一使用multimap
     using CacheLevelKey = std::multimap<key_t,std::shared_ptr<CacheSST>,std::less<>>;
 
     std::vector<CacheLevelTime> cacheAllSST;
-//    std::vector<CacheLevelKey> cacheKey;
+//    std::vector<CacheLevelKey> cacheKey;//不维护每一层按key排序  在compaction过程中动态生成需要合并的内容
 
     timeStamp_t fileSuffix;//每个文件加一个全局唯一id方便判断
     timeStamp_t timeStamp;//新插入元素的时间戳
