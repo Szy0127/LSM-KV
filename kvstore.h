@@ -56,7 +56,7 @@ private:
     using CacheLevelTime = std::multimap<timeStamp_t,std::shared_ptr<CacheSST>,std::greater<>>;
 
     //合并时下层需要按key排序
-    using CacheLevelKey = std::map<key_t,std::shared_ptr<CacheSST>,std::less<>>;
+    using CacheLevelKey = std::multimap<key_t,std::shared_ptr<CacheSST>,std::less<>>;
 
     std::vector<CacheLevelTime> cacheAllSST;
 //    std::vector<CacheLevelKey> cacheKey;
@@ -74,14 +74,14 @@ private:
     void memCompaction();
 
     //0-->1 compaction   4路
-    void zeroCompaction();
-
     // i--> i+1 (i>=1) 2路
     void compaction(int level);
 
     //上层与下层归并排序 由于key不相交 最多2路 最后一层需要删delete
     void mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp,CacheLevelKey &cacheLevelKeyDown,bool last_level);
 
+    //第0层到第1层需要4路归并 KeyUp一定是3个
+    void mergeSort4Ways(CacheLevelKey &cacheLevelKeyUp,CacheLevelKey &cacheLevelKeyDown,bool last_level);
     static int maxLevelSize(int level);
 
     //搜索key时二分查找index
@@ -90,7 +90,7 @@ private:
 
     //若找到key 返回true 并传递位置与长度
     //由于length由后一个的offset计算出 最后一个无法知道长度 如果使用-1表示需要用signed 导致narrow的问题 所以增加last变量
-    static bool getValueInfo(const CacheSST &cache,const key_t &key,unsigned int &offset,unsigned int &length,bool &last);
+    static bool getValueInfo(const CacheSST &cache,key_t key,unsigned int &offset,unsigned int &length,bool &last);
 
     //loadSST时使用
     static std::shared_ptr<CacheSST> getCacheFromSST(const std::string &path);

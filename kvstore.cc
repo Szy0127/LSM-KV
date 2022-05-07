@@ -1,11 +1,13 @@
 #include "kvstore.h"
 #include <memory>
 #include <string>
+#include <cassert>
 
 
 std::string KVStore::SUFFIX = ".sst";
 
-KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir), compactionLevel(0), timeCompaction(0),fileSuffix(0),timeStamp(1){
+KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir), compactionLevel(0), timeCompaction(0),
+                                           fileSuffix(0), timeStamp(1) {
     if (dataPath.back() != '/') {
         dataPath.push_back('/');
     }
@@ -32,11 +34,11 @@ void KVStore::loadSST() {
         for (auto &sstable: sstables) {
             std::string name = sstable.substr(0, sstable.find(SUFFIX));
             timeStamp_t t = std::stoull(name.substr(0, name.find('_')));//这个分隔符需要和memcompation里保持一致
-            timeStamp_t fs = std::stoull(name.substr(name.find('_')+1));
+            timeStamp_t fs = std::stoull(name.substr(name.find('_') + 1));
             if (t > timeStamp) {
                 timeStamp = t;
             }
-            if(fs > fileSuffix){
+            if (fs > fileSuffix) {
                 fileSuffix = fs;
             }
             std::shared_ptr<CacheSST> cache = getCacheFromSST(levelPath + sstable);
@@ -63,6 +65,7 @@ KVStore::~KVStore() {
 void KVStore::put(key_t key, const value_t &s) {
     //先插入 这样是否超出阈值的结果是显然的  如果超出就撤回这次操作
     //否则计算的结果会基于是否覆盖 需要进入memtable的插入过程 很麻烦
+
     memTable->put(key, s);
     if (HEADER_SIZE + BF_SIZE + sizeof(Index) * (memTable->getLength()) + memTable->getSize() >= MAX_SSTABLE_SIZE) {
         memTable->undo(key);
@@ -99,17 +102,19 @@ std::string KVStore::get(key_t key) {
 //            std::cout << cache.second->header->timeStamp << " ";
             //在找到的同时拿到位置与大小信息
 //        std::cout<<cache.first<<" "<<cache.second.header->timeStamp<<std::endl;
-                bool last = false;
-                find = getValueInfo(*cache.second, key, offset, length,last);
+            bool last = false;
+
+
+            find = getValueInfo(*cache.second, key, offset, length, last);
             if (find) {
                 //根据文件名 位置 大小 直接读出信息
                 std::ifstream f(cache.second->path);
                 f.seekg(offset);
                 std::string res;
-                if(!last){
+                if (!last) {
                     res = readStringFromFileByLength(f, length);
-                }else{
-                    res = readStringFromFileByLength(f, 0,true);
+                } else {
+                    res = readStringFromFileByLength(f, 0, true);
                 }
                 f.close();
                 if (res == DELETED) {
@@ -119,7 +124,6 @@ std::string KVStore::get(key_t key) {
             }
         }
     }
-//    std::cout<<"not found"<<std::endl;
     return NOTFOUND;
 
 }
@@ -239,7 +243,7 @@ void KVStore::memCompaction() {
 
 
 
-//    std::cout << "[info]writeSST:" << path << " " << length << " " << key_min << " " << key_max << std::endl;
+//    std::cout << "[debug]writeSST:" << path << " " << length << " " << key_min << " " << key_max << std::endl;
 
     auto *header = new SSTheader(t, length, key_min, key_max);
     f.write((char *) header, HEADER_SIZE);
@@ -278,21 +282,29 @@ void KVStore::memCompaction() {
         f << kv.second;
     }
 
+
     f.close();
 //    read(path);
     memTable->reset();
 
-    //compactionLevel==0 正常插入
-    //!=0 合并时借助同一个函数生成sstable
-    if (compactionLevel == 0 && cacheAllSST[0].size() > maxLevelSize(0)) {
-        zeroCompaction();
+//    unsigned int offset;
+//    unsigned int l;
+//    bool last;
+//    bool find = getValueInfo(*cache, 32522, offset, l, last);
+//    if (find) {
+//        std::ifstream f(path);
+//        f.seekg(offset);
+//        value_t res = readStringFromFileByLength(f, l, last);
+//        std::cout << "[debug]compaction:" << path << " " << res.length() << std::endl;
+//    }
+
+    //compactionLevel==0 用户插入  需要检查
+    // !=0 合并时借助同一个函数生成sstable 不需要检查
+    if (compactionLevel == 0) {
+        compaction(0);
     }
-
 }
 
-void KVStore::zeroCompaction() {
-    compaction(0);
-}
 
 bool KVStore::isIntersect(key_t &l1, key_t &r1, key_t &l2, key_t &r2) {
     if (r1 < l2 || r2 < l1) {
@@ -301,9 +313,9 @@ bool KVStore::isIntersect(key_t &l1, key_t &r1, key_t &l2, key_t &r2) {
     return true;
 }
 
-value_t KVStore::readStringFromFileByLength(std::ifstream &f, unsigned int length,bool last) {
+value_t KVStore::readStringFromFileByLength(std::ifstream &f, unsigned int length, bool last) {
 //    if (length < 0) {
-    if(last){
+    if (last) {
         std::string v;
         f >> v;
         return v;
@@ -323,8 +335,7 @@ value_t KVStore::readStringFromFileByLength(std::ifstream &f, unsigned int lengt
  * 开始归并排序 当一个文件结束后更新变量 继续
  * 当一层所有文件合并完后  继续更新另一层的文件
  */
-void KVStore::mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cacheLevelKeyDown,bool last_level)
-{
+void KVStore::mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cacheLevelKeyDown, bool last_level) {
     auto itup = cacheLevelKeyUp.begin();
     auto itdown = cacheLevelKeyDown.begin();
 
@@ -351,44 +362,42 @@ void KVStore::mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cach
     key_t keyUp = 0;
     key_t keyDown = 0;
     value_t value;
-    unsigned int length = 0;
-    bool last = false;
     int i = 0;
     int j = 0;
-    timeCompaction = timeUp > timeDown ? timeUp : timeDown;
 
 //    std::cout<<"compact"<<cacheUp->path<<" "<<cacheDown->path<<"to"<<timeCompaction<<std::endl;
+
 
     //两路归并
     while (i < sizeUp && j < sizeDown) {
         keyUp = indexListUp[i].key;
         keyDown = indexListDown[j].key;
-        if (keyUp < keyDown) {
-            if(i < sizeUp - 1) {
+        if (keyUp <= keyDown) {
+            if (i < sizeUp - 1) {
                 value = readStringFromFileByLength(fup, indexListUp[i + 1].offset - indexListUp[i].offset);
-            }else{
-                value = readStringFromFileByLength(fup, 0,true);
+            } else {
+                value = readStringFromFileByLength(fup, 0, true);
             }
-            if(!last_level || value != DELETED){//最后一层不需要保留delete标记
+            if (!last_level || value != DELETED) {//最后一层不需要保留delete标记
                 timeCompaction = timeUp > timeCompaction ? timeUp : timeCompaction;//每次操作都更新 防止剩余情况
                 put(keyUp, value);
             }
 
             i++;
-            if(keyUp == keyDown){//相等的时候直接忽略时间戳大的 如果一前一后put会在临界点引发问题
+            if (keyUp == keyDown) {//相等的时候直接忽略时间戳大的 如果一前一后put会在临界点引发问题
 //                readStringFromFileByLength(fdown, length);// 用这个方法一模一样读出来 会指针错 debug也看不出错那
-                if(j < sizeDown-1){//如果没到末尾需要跳过这个kv 如果到了就不用管了
-                    fdown.seekg(indexListDown[j+1].offset);
+                if (j < sizeDown - 1) {//如果没到末尾需要跳过这个kv 如果到了就不用管了
+                    fdown.seekg(indexListDown[j + 1].offset);
                 }
                 j++;
             }
         } else {
-            if(j < sizeDown - 1) {
+            if (j < sizeDown - 1) {
                 value = readStringFromFileByLength(fdown, indexListDown[j + 1].offset - indexListDown[j].offset);
-            }else{
-                value = readStringFromFileByLength(fdown, 0,true);
+            } else {
+                value = readStringFromFileByLength(fdown, 0, true);
             }
-            if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+            if (!last_level || value != DELETED) {//最后一层不需要保留delete标记
                 timeCompaction = timeDown > timeCompaction ? timeDown : timeCompaction;
                 put(keyDown, value);
             }
@@ -413,18 +422,18 @@ void KVStore::mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cach
             updateIterInfo(cacheDown, timeDown, fdown, sizeDown, indexListDown);
         }
     }
-    while(itup != cacheLevelKeyUp.end()){//如果一开始下层就没有会直接进入这里
-        for (; i < sizeUp-1; i++) {
+    while (itup != cacheLevelKeyUp.end()) {//如果一开始下层就没有会直接进入这里
+        for (; i < sizeUp - 1; i++) {
             keyUp = indexListUp[i].key;
             value = readStringFromFileByLength(fup, indexListUp[i + 1].offset - indexListUp[i].offset);
-            if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+            if (!last_level || value != DELETED) {//最后一层不需要保留delete标记
                 timeCompaction = timeUp > timeCompaction ? timeUp : timeCompaction;
                 put(keyUp, value);
             }
         }
-        keyUp = indexListUp[sizeUp-1].key;
-        value = readStringFromFileByLength(fup, 0,true);
-        if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+        keyUp = indexListUp[sizeUp - 1].key;
+        value = readStringFromFileByLength(fup, 0, true);
+        if (!last_level || value != DELETED) {//最后一层不需要保留delete标记
             timeCompaction = timeUp > timeCompaction ? timeUp : timeCompaction;
             put(keyUp, value);
         }
@@ -437,17 +446,17 @@ void KVStore::mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cach
         updateIterInfo(cacheUp, timeUp, fup, sizeUp, indexListUp);
     }
     while (itdown != cacheLevelKeyDown.end()) {
-        for (; j < sizeDown-1; j++) {
+        for (; j < sizeDown - 1; j++) {
             keyDown = indexListDown[j].key;
             value = readStringFromFileByLength(fdown, indexListDown[j + 1].offset - indexListDown[j].offset);
-            if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+            if (!last_level || value != DELETED) {//最后一层不需要保留delete标记
                 timeCompaction = timeDown > timeCompaction ? timeDown : timeCompaction;
                 put(keyDown, value);
             }
         }
-        keyDown = indexListDown[sizeDown-1].key;
-        value = readStringFromFileByLength(fdown, 0,true);
-        if(!last_level || value != DELETED) {//最后一层不需要保留delete标记
+        keyDown = indexListDown[sizeDown - 1].key;
+        value = readStringFromFileByLength(fdown, 0, true);
+        if (!last_level || value != DELETED) {//最后一层不需要保留delete标记
             timeCompaction = timeDown > timeCompaction ? timeDown : timeCompaction;
             put(keyDown, value);
         }
@@ -462,6 +471,93 @@ void KVStore::mergeSort2Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cach
     fup.close();
     fdown.close();
 }
+
+void KVStore::mergeSort4Ways(CacheLevelKey &cacheLevelKeyUp, CacheLevelKey &cacheLevelKeyDown, bool last_level) {
+
+    //用vector是因为对于map容器来说没法索引 想拿3个只能另外计数 但计数变量的作用域扩大了
+    std::vector<std::shared_ptr<CacheSST>> caches;
+    std::vector<uint64_t> size(4, 0);
+    std::vector<uint64_t> index(4, 0);
+    std::vector<Index *> indexList(4, nullptr);
+//    std::vector<std::ifstream> f;
+    std::ifstream f[4]{};
+    std::vector<timeStamp_t> time(4, 0);
+
+    for (auto const &cache: cacheLevelKeyUp) {
+        caches.emplace_back(cache.second);
+//        f.emplace_back(std::ifstream(cache.second->path));
+    }
+    int way = 3;
+    auto it = cacheLevelKeyDown.begin();
+    if (!cacheLevelKeyDown.empty()) {
+        caches.emplace_back(it->second);
+//        f.emplace_back(std::ifstream(it->second->path));
+        way = 4;
+    }
+
+    //用统一的函数从cache中拿到归并时需要的相关变量
+    for (int i = 0; i < way; i++) {
+        updateIterInfo(caches[i], time[i], f[i], size[i], indexList[i]);
+    }
+
+    key_t key;
+    value_t value;
+
+    while (true) {
+        key_t keyMin = UINT64_MAX;
+        int loc = -1;
+        for (int i = 0; i < way; i++) {//找最小的一个key
+            if (index[i] >= size[i]) {//这一路结束了
+                continue;
+            }
+            key = indexList[i][index[i]].key;
+            if (key <= keyMin) {
+                bool change = true;
+                if (key == keyMin) {//相同的时候只需要保留时间戳大的
+                    int tmp = time[loc] <= time[i] ? loc : i;
+                    change = tmp == loc;
+                    if (index[tmp] < size[tmp] - 1) {
+                        f[tmp].seekg(indexList[tmp][index[tmp] + 1].offset);
+                    }
+                    index[tmp]++;
+                }
+                keyMin = key;
+                if (change) {
+                    loc = i;
+                }
+            }
+        }
+        if (loc == -1) {//4路都结束了
+            break;
+        }
+        if (index[loc] < size[loc] - 1) {
+            value = readStringFromFileByLength(f[loc], indexList[loc][index[loc] + 1].offset -
+                                                       indexList[loc][index[loc]].offset);
+        } else {
+            value = readStringFromFileByLength(f[loc], 0, true);
+        }
+        if (!last_level || value != DELETED) {//最后一层不需要保留delete标记
+            timeCompaction = time[loc] > timeCompaction ? time[loc] : timeCompaction;//每次操作都更新 防止剩余情况
+            put(keyMin, value);
+        }
+        index[loc]++;
+        if (way == 4 && index[3] == size[3]) {//第1层某一个sstable读完了 接着下一个
+            it++;
+            if (it == cacheLevelKeyDown.end()) {
+                way = 3;
+                continue;
+            }
+            index[3] = 0;
+            caches[3] = it->second;
+            updateIterInfo(caches[3], time[3], f[3], size[3], indexList[3]);
+        }
+    }
+
+    for (int i = 0; i < way; i++) {
+        f[i].close();
+    }
+}
+
 /*
  * 检查是否需要合并
  * 如果是最后一层向下 新开一层
@@ -479,6 +575,29 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
     if (cacheAllSST[level].size() <= max) {
         return;//不需要compaction  结束递归
     }
+    //检查不相交 有迭代问题遗留
+//    if (level > 0 && cacheAllSST.size() >= 1 && cacheAllSST[level].size() >= 1) {
+//
+//        std::map<key_t,std::pair<key_t,std::string>> tmp;
+//        for(auto  c:cacheAllSST[level]){
+//            tmp.insert(std::make_pair(c.second->header->key_min,
+//                                      std::make_pair(c.second->header->key_max, c.second->path)));
+//        }
+//
+//        std::vector<std::pair<key_t,key_t>> t;
+//        std::vector<std::string> pa;
+//        for(auto p:tmp){
+//            t.emplace_back(std::make_pair(p.first, p.second.first));
+//            pa.emplace_back(p.second.second);
+//        }
+//        for(int i = 1; i < t.size();i++){
+//            if(isIntersect(t[i].first, t[i].second, t[i - 1].first, t[i - 1].second)){
+//                std::cout<<level<<pa[i]<<" "<<pa[i-1]<<std::endl;
+//                exit(0);
+//            }
+//        }
+//    }
+
 
     if (cacheAllSST.size() <= level + 1) {//如果level是最后一层 需要向下再新建一层
         cacheAllSST.emplace_back(CacheLevelTime());
@@ -489,54 +608,69 @@ void KVStore::compaction(int level) {//level满了 向level+1合并
         }
     }
 
+
+
+    //如果使用遍历每个上层sst判断重合的方法 会有一个反例
+    //上层100-300 400-500  下层300-400 不会认为相交 故不compaction
+    //但是在合并过程中  上层两个可能会写入一个sst 直接与下层没有合并的相交了
+    key_t keyMin = UINT64_MAX;//记录上层区间
+    key_t keyMax = 0;
     int count = 1;
+    max = level > 0 ? max : 0;//第0层要全部向下合并
     CacheLevelKey cacheLevelKeyUp;
     for (auto const &cache: cacheAllSST[level]) {//取时间戳最小的若干个  也就是最后的
         if (count > max) {
             cacheLevelKeyUp.insert(std::make_pair(cache.second->header->key_min, cache.second));
+            if(cache.second->header->key_min < keyMin){
+                keyMin = cache.second->header->key_min;
+            }
+            if(cache.second->header->key_max > keyMax){
+                keyMax = cache.second->header->key_max;
+            }
         }
         count++;
     }
+
     CacheLevelKey cacheLevelKeyDown;
     for (auto const &cacheDown: cacheAllSST[level + 1]) {//找到下层与上层key有相交的部分进行合并
-        for (auto const &cacheUp: cacheLevelKeyUp) {
-            auto headerUp = cacheUp.second->header;
             auto headerDown = cacheDown.second->header;
-            if (isIntersect(headerUp->key_min, headerUp->key_max, headerDown->key_min, headerDown->key_max)) {
+            if (isIntersect(keyMin, keyMax, headerDown->key_min,headerDown->key_max)) {
                 cacheLevelKeyDown.insert(std::make_pair(headerDown->key_min, cacheDown.second));
-                break;
             }
-        }
     }
 
     compactionLevel = level + 1;//决定memcompation保存文件的位置
-    bool last_level = (level == cacheAllSST.size()-2);//最后一层删delete
-    mergeSort2Ways(cacheLevelKeyUp,cacheLevelKeyDown,last_level);
+    bool last_level = (level == cacheAllSST.size() - 2);//最后一层删delete
+    if (level > 0) {
+        mergeSort2Ways(cacheLevelKeyUp, cacheLevelKeyDown, last_level);
+    } else {
+        mergeSort4Ways(cacheLevelKeyUp, cacheLevelKeyDown, last_level);
+    }
     memCompaction();
     compactionLevel = 0;
     timeCompaction = 0;
 
     //这些多出来的要从原来的缓存和文件中删除 新加入的缓存会在memCompation中自动进行
-    for(auto it = cacheLevelKeyUp.begin();it!=cacheLevelKeyUp.end();it++){
-        removeSST(it,level);
+    for (auto it = cacheLevelKeyUp.begin(); it != cacheLevelKeyUp.end(); it++) {
+        removeSST(it, level);
     }
-    for(auto it = cacheLevelKeyDown.begin();it!=cacheLevelKeyDown.end();it++){
-        removeSST(it,level+1);
+    for (auto it = cacheLevelKeyDown.begin(); it != cacheLevelKeyDown.end(); it++) {
+        removeSST(it, level + 1);
     }
     compaction(level + 1);
 }
-void KVStore::removeSST(CacheLevelKey::iterator &cacheIt, int level)
-{
+
+void KVStore::removeSST(CacheLevelKey::iterator &cacheIt, int level) {
     std::string path = cacheIt->second->path;
+//    std::cout<<"[debug]remove "<<path<<" "<<cacheIt->second->header->key_min<<" "<<cacheIt->second->header->key_max<<std::endl;
     //multimap直接调erase(key)会删掉所有内容  使用find找到第一个key 然后比对唯一的path
     auto itTime = cacheAllSST[level].find(cacheIt->second->header->timeStamp);
-    while(itTime->second->path!=path){
+    while (itTime->second->path != path) {
         itTime++;
     }
     //同时把缓存和文件都删了
     cacheAllSST[level].erase(itTime);
     utils::rmfile(path.c_str());
-//    std::cout<<"remove "<<path<<std::endl;
 }
 
 std::shared_ptr<KVStore::CacheSST> KVStore::getCacheFromSST(const std::string &path) {
@@ -592,7 +726,7 @@ uint64_t KVStore::binarySearchScan(const Index *const indexList, uint64_t length
     return l;
 }
 
-bool KVStore::getValueInfo(const CacheSST &cache, const key_t &key, unsigned int &offset, unsigned &length,bool &last) {
+bool KVStore::getValueInfo(const CacheSST &cache, key_t key, unsigned int &offset, unsigned &length, bool &last) {
 //    std::cout<<"[info]is finding "<<key<<std::endl;
     // 检查范围
     if (key < cache.header->key_min || key > cache.header->key_max) {
@@ -609,9 +743,9 @@ bool KVStore::getValueInfo(const CacheSST &cache, const key_t &key, unsigned int
         return false;
     }
     offset = cache.indexList[loc].offset;
-    if(loc < cache.header->length - 1) {
+    if (loc < cache.header->length - 1) {
         length = cache.indexList[loc + 1].offset - offset;
-    }else{
+    } else {
         last = true;
     }
     return true;
@@ -635,10 +769,10 @@ KVStore::scanInSST(const std::string &path, const Index *const indexList, const 
     }
 
     std::string v;
-    if(!last){
+    if (!last) {
         v = readStringFromFileByLength(f, indexList[end + 1].offset - offset);
-    }else{
-        v = readStringFromFileByLength(f, 0,true);
+    } else {
+        v = readStringFromFileByLength(f, 0, true);
     }
     heap.push(std::make_pair(indexList[end].key, v));
     f.close();
