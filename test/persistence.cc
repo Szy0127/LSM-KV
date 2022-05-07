@@ -160,7 +160,7 @@ void usage(const char *prog, const char *verb, const char *mode)
 int main(int argc, char *argv[])
 {
 	bool verbose = false;
-	bool testmode = false;
+	bool testmode = true;
 
 //	if (argc == 2) {
 //		verbose = std::string(argv[1]) == "-v";
