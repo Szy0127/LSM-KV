@@ -67,11 +67,11 @@ void test_base(int length,std::ofstream &f){
 
 }
 int main() {
-    std::ofstream f("../test_res/test_map_small.txt");
-//    std::ofstream f("../test_res/test_base_big.txt");
-    std::vector<int> test_length_small{1000,1500,2000,2500,3000,3500,4000,4500,5000,8000,10000};
-//    std::vector<int> test_length_big{5000,10000,20000,50000,80000,100000};
-    for(auto i:test_length_small){
+//    std::ofstream f("../test_res/test_map_small.txt");
+    std::ofstream f("../test_res/test_map_big.txt");
+//    std::vector<int> test_length_small{1000,1500,2000,2500,3000,3500,4000,4500,5000,8000,10000};
+    std::vector<int> test_length_big{5000,10000,20000,50000,80000,100000};
+    for(auto i:test_length_big){
         test_base(i,f);
     }
     f.close();

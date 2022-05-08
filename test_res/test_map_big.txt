@@ -1,0 +1,24 @@
+length:5000
+put latency:26.3296
+get latency:84.7775
+del latency:86.2693
+length:10000
+put latency:47.5727
+get latency:80.2852
+del latency:81.9513
+length:20000
+put latency:112.699
+get latency:90.7158
+del latency:92.0057
+length:50000
+put latency:233.018
+get latency:98.7692
+del latency:97.4888
+length:80000
+put latency:297.505
+get latency:99.0481
+del latency:115.815
+length:100000
+put latency:389.29
+get latency:100.889
+del latency:101.686

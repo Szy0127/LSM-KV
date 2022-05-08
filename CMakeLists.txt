@@ -7,8 +7,8 @@ include_directories(.)
 
 add_executable(lsm_kv
         test/test.h
-        test/correctness.cc
-#        main.cpp
+#        test/correctness.cc
+        main.cpp
         kvstore.cc
         kvstore.h
         kvstore_api.h
