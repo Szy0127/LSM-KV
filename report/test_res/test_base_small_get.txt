@@ -1,0 +1,22 @@
+length:1000
+get latency:0.83
+length:1500
+get latency:0.555
+length:2000
+get latency:0.415833
+length:2500
+get latency:88.7617
+length:3000
+get latency:69.7564
+length:3500
+get latency:59.1195
+length:4000
+get latency:50.065
+length:4500
+get latency:89.0211
+length:5000
+get latency:80.786
+length:8000
+get latency:76.6709
+length:10000
+get latency:81.0334

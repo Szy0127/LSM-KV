@@ -1,0 +1,12 @@
+length:5000
+get latency:86.9342
+length:10000
+get latency:80.3677
+length:20000
+get latency:90.2602
+length:50000
+get latency:97.506
+length:80000
+get latency:98.6112
+length:100000
+get latency:102.999

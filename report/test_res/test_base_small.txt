@@ -1,0 +1,44 @@
+length:1000
+put latency:1.994
+get latency:0.83
+del latency:0.830833
+length:1500
+put latency:1.99467
+get latency:0.555
+del latency:1.17333
+length:2000
+put latency:2.0115
+get latency:0.415833
+del latency:1.24875
+length:2500
+put latency:23.5372
+get latency:88.7617
+del latency:88.4437
+length:3000
+put latency:23.308
+get latency:69.7564
+del latency:69.7206
+length:3500
+put latency:18.816
+get latency:59.1195
+del latency:59.09
+length:4000
+put latency:15.719
+get latency:50.065
+del latency:51.9444
+length:4500
+put latency:27.482
+get latency:89.0211
+del latency:93.46
+length:5000
+put latency:25.3384
+get latency:80.786
+del latency:83.2698
+length:8000
+put latency:51.1178
+get latency:76.6709
+del latency:79.8905
+length:10000
+put latency:46.4801
+get latency:81.0334
+del latency:93.9127
