@@ -20,7 +20,7 @@ public:
     //5个kvstore需要实现的接口 memtable也需要实现
 
     virtual void put(const key_t &key,const value_t &value) = 0;
-    virtual value_t get(const key_t &key)const= 0;
+    virtual value_t get(const key_t &key)= 0;
     virtual bool del(const key_t &key) = 0;
     virtual void scan(const key_t &key1,const key_t &key2,KVheap &heap) = 0;
     virtual void reset()=0;

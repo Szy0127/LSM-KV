@@ -2,6 +2,7 @@
 
 #include "kvstore_api.h"
 #include "MemTable/SkipList/SkipList.h"
+#include "MemTable/Mymap.h"
 #include "BloomFilter/BloomFilter.h"
 #include "utils/utils.h"
 #include "utils/types.h"

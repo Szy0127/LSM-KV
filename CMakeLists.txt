@@ -16,6 +16,7 @@ add_executable(lsm_kv
         BloomFilter/BloomFilter.cpp
         utils/MurmurHash3.h
         MemTable/MemTable.h
+        MemTable/Mymap.h
         MemTable/SkipList/SkipList.cpp
         MemTable/SkipList/SkipList.h
         utils/types.h

@@ -95,7 +95,7 @@ void SkipList::put(const key_t &key, const value_t &value) {
 }
 
 
-value_t SkipList::get(const key_t &key)const{
+value_t SkipList::get(const key_t &key){
     SKNode *x = head;
     for (int i = level - 1; i >= 0; i--) {
         while (x->forwards[i]->key < key) {

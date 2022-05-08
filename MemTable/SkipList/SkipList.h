@@ -64,7 +64,7 @@ public:
     ~SkipList() override;
 
     void put(const key_t &key, const value_t &value)override;
-    value_t get(const key_t &key)const override;
+    value_t get(const key_t &key) override;
 
     //删除操作需更新key的范围
     bool del(const key_t &key)override;

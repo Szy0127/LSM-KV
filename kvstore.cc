@@ -14,7 +14,7 @@ KVStore::KVStore(const std::string &dir) : KVStoreAPI(dir), dataPath(dir), compa
     if (dataPath.back() != '/') {
         dataPath.push_back('/');
     }
-    memTable = new SkipList;
+    memTable = new Mymap;
     //测试的时候每次是从头开始的 需要把本地的文件删干净 或者不进行读入的操作 或者修改测试的代码 加reset
     loadSST();
 }
