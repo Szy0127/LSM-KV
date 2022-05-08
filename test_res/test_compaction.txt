@@ -1,0 +1,38 @@
+length:1000
+put latency:39.927
+length:1500
+put latency:105.052
+length:2000
+put latency:92.238
+length:2500
+put latency:182.56
+length:3000
+put latency:153.768
+length:3500
+put latency:130.232
+length:4000
+put latency:199.274
+length:4500
+put latency:188.606
+length:5000
+put latency:257.115
+length:5500
+put latency:232.832
+length:6000
+put latency:215.097
+length:6500
+put latency:301.661
+length:7000
+put latency:270.71
+length:7500
+put latency:349.731
+length:8000
+put latency:323.761
+length:8500
+put latency:302.726
+length:9000
+put latency:356.048
+length:9500
+put latency:341.519
+length:10000
+put latency:395.742
